@@ -186,24 +186,30 @@ function App() {
 
     // Validate shelf constraints (if dropped into a shelf)
     if (destShelf) {
-      if (draggedItem.height > destShelf.height) {
-        alert(`❌ '${draggedItem.name}' is too tall for '${destShelf.name}' shelf.`);
-        return;
-      }
-      const totalOccupiedWidth =
-        destShelf.items.reduce((sum, i) => sum + i.width, 0) +
-        draggedItem.width + 25;
+  if (draggedItem.height > destShelf.height) {
+    alert(`❌ '${draggedItem.name}' is too tall for '${destShelf.name}' shelf.`);
+    return;
+  }
 
-      if (draggedItem.height > destShelf.height) {
-        alert(`❌ '${draggedItem.name}' is too tall for '${destShelf.name}' shelf.`);
-        return;
-      }
+  const ITEM_MARGIN = 4; // same margin as used in UI
 
-      if (totalOccupiedWidth > destShelf.width) {
-        alert(`❌ Not enough horizontal space on '${destShelf.name}' shelf for '${draggedItem.name}'.`);
-        return;
-      }
+  // Check if item is being rearranged in the same shelf
+  const isRearrangingInSameShelf = source.droppableId === destination.droppableId;
+
+  // Only calculate width check if moving across shelves
+  if (!isRearrangingInSameShelf) {
+    const SPACING_BUFFER = destShelf.items.length > 0 ? ITEM_MARGIN * (destShelf.items.length + 1) : 0;
+
+    const totalOccupiedWidth = destShelf.items.reduce((sum, i) => sum + i.width, 0) + draggedItem.width + 4 +SPACING_BUFFER;
+    console.log(`Total occupied width on '${destShelf.name}': ${totalOccupiedWidth}px`, destShelf.width);
+
+    if (totalOccupiedWidth > destShelf.width) {
+      alert(`❌ Not enough horizontal space on '${destShelf.name}' shelf for '${draggedItem.name}'.`);
+      return;
     }
+  }
+}
+
 
     // Moving within the same container
     if (source.droppableId === destination.droppableId) {
