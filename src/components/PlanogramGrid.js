@@ -16,20 +16,36 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip }) => {
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
       }}
     >
-      {shelves.map((shelf, idx) => (
-        <Droppable droppableId={`shelf-line-${idx}`} direction="horizontal" key={idx}>
-          {(provided, snapshot) => (
-            <ShelfLine
-              provided={provided}
-              snapshot={snapshot}
-              shelf={shelf}
-              items={shelfLines[idx]}
-              shelfIdx={idx}
-              ItemWithTooltip={ItemWithTooltip}
-              SHELF_GAP={SHELF_GAP}
-            />
-          )}
-        </Droppable>
+      {shelves.map((shelf, shelfIdx) => (
+        <div
+          key={shelfIdx}
+          style={{
+            display: 'flex',
+            gap: '4px',
+            padding: '0 4px',
+            marginBottom: SHELF_GAP
+          }}
+        >
+          {shelf.subShelves.map((subShelf, subShelfIdx) => (
+            <Droppable
+              droppableId={`shelf-line-${shelfIdx}-${subShelfIdx}`}
+              direction="horizontal"
+              key={`${shelfIdx}-${subShelfIdx}`}
+            >
+              {(provided, snapshot) => (
+                <ShelfLine
+                  provided={provided}
+                  snapshot={snapshot}
+                  shelf={subShelf}
+                  items={shelfLines[shelfIdx][subShelfIdx]}
+                  shelfIdx={`${shelfIdx}-${subShelfIdx}`}
+                  ItemWithTooltip={ItemWithTooltip}
+                  SHELF_GAP={SHELF_GAP}
+                />
+              )}
+            </Droppable>
+          ))}
+        </div>
       ))}
     </div>
   );

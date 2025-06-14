@@ -19,8 +19,9 @@ const initialItems = [
     id: "item-1",
     name: "Chips",
     image: "/images/chips.png",
-    width: 60,
+    width: 40,
     height: 80,
+    bgColor: "#f5deb3",
     description: "Crispy potato chips - perfect for snacking anytime. Made with premium potatoes and seasoned to perfection.",
     stackable: true,
     quantity: 1,
@@ -32,7 +33,8 @@ const initialItems = [
     name: "Nachos",
     image: "/images/nachos.png",
     width: 60,
-    height: 80,
+    height: 100,
+    bgColor: "#f4a460",
     description: "Crunchy tortilla chips ideal for dipping. Great with salsa, cheese, or guacamole.",
     stackable: true,
     quantity: 1,
@@ -43,8 +45,9 @@ const initialItems = [
     id: "item-3",
     name: "Nuts",
     image: "/images/nuts.png",
-    width: 50,
-    height: 60,
+    width: 40,
+    height: 70,
+    bgColor: "#deb887",
     description: "Mixed nuts containing almonds, cashews, and peanuts. A healthy snack option rich in protein.",
     stackable: true,
     quantity: 1,
@@ -55,8 +58,9 @@ const initialItems = [
     id: "item-4",
     name: "Biscuits",
     image: "/images/biscuits.png",
-    width: 70,
-    height: 90,
+    width: 100,
+    height: 30,
+    bgColor: "#ffe4c4",
     description: "Sweet and crunchy biscuits made with real butter. Perfect with tea or coffee.",
     stackable: true,
     quantity: 1,
@@ -69,6 +73,7 @@ const initialItems = [
     image: "/images/candy.png",
     width: 40,
     height: 40,
+    bgColor: "#ffb6c1",
     description: "Assorted colorful candies with fruity flavors. A delightful treat for all ages.",
     stackable: true,
     quantity: 1,
@@ -79,8 +84,9 @@ const initialItems = [
     id: "item-6",
     name: "Soda",
     image: "/images/soda.png",
-    width: 50,
-    height: 100,
+    width: 45,
+    height: 70,
+    bgColor: "#e0f7fa",
     description: "Refreshing carbonated soft drink with a crisp, clean taste. Best served chilled.",
     stackable: false,
     quantity: 1,
@@ -92,7 +98,8 @@ const initialItems = [
     name: "Juice",
     image: "/images/juice.png",
     width: 50,
-    height: 120,
+    height: 100,
+    bgColor: "#ffcc80",
     description: "100% natural fruit juice packed with vitamins. No artificial colors or preservatives.",
     stackable: false,
     quantity: 1,
@@ -104,30 +111,68 @@ const initialItems = [
     name: "Cola",
     image: "/images/cola.png",
     width: 50,
-    height: 130,
+    height: 120,
+    bgColor: "#d32f2f",
     description: "Classic cola drink with the perfect balance of sweetness and fizz. An iconic refreshment.",
     stackable: false,
     quantity: 1,
     brand: "Coca-Cola",
     price: "$1.99"
-  },
+  }
 ];
 
-// 1. Define shelves with individual height and width
-const SHELVES = [
-  { height: 60, width: 700 },
-  { height: 100, width: 200 },
-  { height: 80, width: 900 },
-  { height: 120, width: 400 },
-  { height: 90, width: 600 },
 
+const SHELVES = [
+  {
+    height: 40,
+    width: 700,
+    subShelves: [
+      { height: 40, width: 350 },
+      { height: 40, width: 350 }
+    ]
+  },
+  {
+    height: 100,
+    width: 200,
+    subShelves: [
+      { height: 100, width: 200 }
+    ]
+  },
+  {
+    height: 80,
+    width: 900,
+    subShelves: [
+      { height: 80, width: 300 },
+      { height: 80, width: 300 },
+      { height: 80, width: 300 }
+    ]
+  },
+  {
+    height: 120,
+    width: 400,
+    subShelves: [
+      { height: 120, width: 200 },
+      { height: 120, width: 200 }
+    ]
+  },
+  {
+    height: 90,
+    width: 600,
+    subShelves: [
+      { height: 90, width: 200 },
+      { height: 90, width: 200 },
+      { height: 90, width: 200 }
+    ]
+  }
 ];
 const SHELF_GAP = 32;
 
 function App() {
-  // Each shelf line is an array of items (with their x position)
+  // Each shelf line is an array of arrays (one array per sub-shelf)
   const [shelfLines, setShelfLines] = useState(
-    Array.from({ length: SHELVES.length }, () => [])
+    Array.from({ length: SHELVES.length }, (_, shelfIdx) =>
+      Array.from({ length: SHELVES[shelfIdx].subShelves.length }, () => [])
+    )
   );
   const [unplacedItems, setUnplacedItems] = useState(initialItems);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -142,17 +187,17 @@ function App() {
     if (source.droppableId === 'items') {
       item = unplacedItems[source.index];
     } else if (source.droppableId.startsWith('shelf-line-')) {
-      const srcIdx = parseInt(source.droppableId.replace('shelf-line-', ''));
-      item = shelfLines[srcIdx][source.index];
+      const [shelfIdx, subShelfIdx] = source.droppableId.replace('shelf-line-', '').split('-').map(Number);
+      item = shelfLines[shelfIdx][subShelfIdx][source.index];
     }
 
     // Dropping onto a shelf line
     if (destination.droppableId.startsWith('shelf-line-')) {
-
-      const destIdx = parseInt(destination.droppableId.replace('shelf-line-', ''));
-      const destShelf = shelfLines[destIdx];
+      const [destShelfIdx, destSubShelfIdx] = destination.droppableId.replace('shelf-line-', '').split('-').map(Number);
+      const destShelf = shelfLines[destShelfIdx][destSubShelfIdx];
       const ITEM_MARGIN = 4;
 
+      // Calculate total width of items in the sub-shelf
       let occupiedWidth = destShelf.reduce((sum, i) => sum + i.width, 0);
       let itemCount = destShelf.length;
 
@@ -165,12 +210,12 @@ function App() {
       const SPACING_BUFFER = itemCount > 0 ? ITEM_MARGIN * (itemCount + 1) : 0;
       const totalOccupiedWidth = occupiedWidth + item.width + SPACING_BUFFER;
 
-      if (totalOccupiedWidth > SHELVES[destIdx].width) {
+      if (totalOccupiedWidth > SHELVES[destShelfIdx].subShelves[destSubShelfIdx].width) {
         alert(`❌ Not enough horizontal space on this shelf for '${item.name}'.`);
         return;
       }
-      if (item.height > SHELVES[destIdx].height) {
-        alert(`❌ '${item.name}' is too tall for this shelf (max height: ${SHELVES[destIdx].height}px).`);
+      if (item.height > SHELVES[destShelfIdx].subShelves[destSubShelfIdx].height) {
+        alert(`❌ '${item.name}' is too tall for this shelf (max height: ${SHELVES[destShelfIdx].subShelves[destSubShelfIdx].height}px).`);
         return;
       }
     }
@@ -179,36 +224,78 @@ function App() {
     if (source.droppableId === 'items' && destination.droppableId.startsWith('shelf-line-')) {
       const newUnplaced = Array.from(unplacedItems);
       newUnplaced.splice(source.index, 1);
-      const lineIdx = parseInt(destination.droppableId.replace('shelf-line-', ''));
-      const newShelfLines = shelfLines.map((line, idx) =>
-        idx === lineIdx ? [...line.slice(0, destination.index), item, ...line.slice(destination.index)] : line
-      );
+      const [shelfIdx, subShelfIdx] = destination.droppableId.replace('shelf-line-', '').split('-').map(Number);
+      const newShelfLines = shelfLines.map((shelf, idx) => {
+        if (idx === shelfIdx) {
+          return shelf.map((subShelf, subIdx) => {
+            if (subIdx === subShelfIdx) {
+              return [...subShelf.slice(0, destination.index), item, ...subShelf.slice(destination.index)];
+            }
+            return subShelf;
+          });
+        }
+        return shelf;
+      });
       setUnplacedItems(newUnplaced);
       setShelfLines(newShelfLines);
       return;
     }
+
     // Drag from shelf line to inventory
     if (source.droppableId.startsWith('shelf-line-') && destination.droppableId === 'items') {
-      const lineIdx = parseInt(source.droppableId.replace('shelf-line-', ''));
-      const newLine = Array.from(shelfLines[lineIdx]);
-      newLine.splice(source.index, 1);
-      const newShelfLines = shelfLines.map((line, idx) => (idx === lineIdx ? newLine : line));
+      const [shelfIdx, subShelfIdx] = source.droppableId.replace('shelf-line-', '').split('-').map(Number);
+      const newShelfLines = shelfLines.map((shelf, idx) => {
+        if (idx === shelfIdx) {
+          return shelf.map((subShelf, subIdx) => {
+            if (subIdx === subShelfIdx) {
+              const newSubShelf = Array.from(subShelf);
+              newSubShelf.splice(source.index, 1);
+              return newSubShelf;
+            }
+            return subShelf;
+          });
+        }
+        return shelf;
+      });
       const newUnplaced = Array.from(unplacedItems);
       newUnplaced.splice(destination.index, 0, item);
       setUnplacedItems(newUnplaced);
       setShelfLines(newShelfLines);
       return;
     }
+
     // Move within shelf lines or between shelf lines
     if (source.droppableId.startsWith('shelf-line-') && destination.droppableId.startsWith('shelf-line-')) {
-      const srcIdx = parseInt(source.droppableId.replace('shelf-line-', ''));
-      const destIdx = parseInt(destination.droppableId.replace('shelf-line-', ''));
-      let newShelfLines = shelfLines.map((line) => [...line]);
-      newShelfLines[srcIdx].splice(source.index, 1);
-      newShelfLines[destIdx].splice(destination.index, 0, item);
+      const [srcShelfIdx, srcSubShelfIdx] = source.droppableId.replace('shelf-line-', '').split('-').map(Number);
+      const [destShelfIdx, destSubShelfIdx] = destination.droppableId.replace('shelf-line-', '').split('-').map(Number);
+
+      const newShelfLines = shelfLines.map((shelf, idx) => {
+        if (idx === srcShelfIdx) {
+          return shelf.map((subShelf, subIdx) => {
+            if (subIdx === srcSubShelfIdx) {
+              const newSubShelf = Array.from(subShelf);
+              newSubShelf.splice(source.index, 1);
+              return newSubShelf;
+            }
+            return subShelf;
+          });
+        }
+        if (idx === destShelfIdx) {
+          return shelf.map((subShelf, subIdx) => {
+            if (subIdx === destSubShelfIdx) {
+              const newSubShelf = Array.from(subShelf);
+              newSubShelf.splice(destination.index, 0, item);
+              return newSubShelf;
+            }
+            return subShelf;
+          });
+        }
+        return shelf;
+      });
       setShelfLines(newShelfLines);
       return;
     }
+
     // Move within inventory
     if (source.droppableId === 'items' && destination.droppableId === 'items') {
       const newUnplaced = Array.from(unplacedItems);
