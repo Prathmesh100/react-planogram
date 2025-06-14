@@ -220,90 +220,39 @@ function App() {
       }
     }
 
-    // Drag from inventory to shelf line
+    // Create new arrays to avoid mutating state directly
+    const newShelfLines = shelfLines.map(shelf => shelf.map(subShelf => [...subShelf]));
+    const newUnplacedItems = [...unplacedItems];
+
+    // Handle drag from inventory to shelf
     if (source.droppableId === 'items' && destination.droppableId.startsWith('shelf-line-')) {
-      const newUnplaced = Array.from(unplacedItems);
-      newUnplaced.splice(source.index, 1);
       const [shelfIdx, subShelfIdx] = destination.droppableId.replace('shelf-line-', '').split('-').map(Number);
-      const newShelfLines = shelfLines.map((shelf, idx) => {
-        if (idx === shelfIdx) {
-          return shelf.map((subShelf, subIdx) => {
-            if (subIdx === subShelfIdx) {
-              return [...subShelf.slice(0, destination.index), item, ...subShelf.slice(destination.index)];
-            }
-            return subShelf;
-          });
-        }
-        return shelf;
-      });
-      setUnplacedItems(newUnplaced);
-      setShelfLines(newShelfLines);
-      return;
+      newUnplacedItems.splice(source.index, 1);
+      newShelfLines[shelfIdx][subShelfIdx].splice(destination.index, 0, item);
     }
-
-    // Drag from shelf line to inventory
-    if (source.droppableId.startsWith('shelf-line-') && destination.droppableId === 'items') {
+    // Handle drag from shelf to inventory
+    else if (source.droppableId.startsWith('shelf-line-') && destination.droppableId === 'items') {
       const [shelfIdx, subShelfIdx] = source.droppableId.replace('shelf-line-', '').split('-').map(Number);
-      const newShelfLines = shelfLines.map((shelf, idx) => {
-        if (idx === shelfIdx) {
-          return shelf.map((subShelf, subIdx) => {
-            if (subIdx === subShelfIdx) {
-              const newSubShelf = Array.from(subShelf);
-              newSubShelf.splice(source.index, 1);
-              return newSubShelf;
-            }
-            return subShelf;
-          });
-        }
-        return shelf;
-      });
-      const newUnplaced = Array.from(unplacedItems);
-      newUnplaced.splice(destination.index, 0, item);
-      setUnplacedItems(newUnplaced);
-      setShelfLines(newShelfLines);
-      return;
+      newShelfLines[shelfIdx][subShelfIdx].splice(source.index, 1);
+      newUnplacedItems.splice(destination.index, 0, item);
     }
-
-    // Move within shelf lines or between shelf lines
-    if (source.droppableId.startsWith('shelf-line-') && destination.droppableId.startsWith('shelf-line-')) {
+    // Handle moving within inventory
+    else if (source.droppableId === 'items' && destination.droppableId === 'items') {
+      const [moved] = newUnplacedItems.splice(source.index, 1);
+      newUnplacedItems.splice(destination.index, 0, moved);
+    }
+    // Handle moving within or between shelves
+    else if (source.droppableId.startsWith('shelf-line-') && destination.droppableId.startsWith('shelf-line-')) {
       const [srcShelfIdx, srcSubShelfIdx] = source.droppableId.replace('shelf-line-', '').split('-').map(Number);
       const [destShelfIdx, destSubShelfIdx] = destination.droppableId.replace('shelf-line-', '').split('-').map(Number);
-
-      const newShelfLines = shelfLines.map((shelf, idx) => {
-        if (idx === srcShelfIdx) {
-          return shelf.map((subShelf, subIdx) => {
-            if (subIdx === srcSubShelfIdx) {
-              const newSubShelf = Array.from(subShelf);
-              newSubShelf.splice(source.index, 1);
-              return newSubShelf;
-            }
-            return subShelf;
-          });
-        }
-        if (idx === destShelfIdx) {
-          return shelf.map((subShelf, subIdx) => {
-            if (subIdx === destSubShelfIdx) {
-              const newSubShelf = Array.from(subShelf);
-              newSubShelf.splice(destination.index, 0, item);
-              return newSubShelf;
-            }
-            return subShelf;
-          });
-        }
-        return shelf;
-      });
-      setShelfLines(newShelfLines);
-      return;
+      
+      newShelfLines[srcShelfIdx][srcSubShelfIdx].splice(source.index, 1);
+      newShelfLines[destShelfIdx][destSubShelfIdx].splice(destination.index, 0, item);
     }
 
-    // Move within inventory
-    if (source.droppableId === 'items' && destination.droppableId === 'items') {
-      const newUnplaced = Array.from(unplacedItems);
-      const [moved] = newUnplaced.splice(source.index, 1);
-      newUnplaced.splice(destination.index, 0, moved);
-      setUnplacedItems(newUnplaced);
-      return;
-    }
+    // Update state with new arrays
+    setShelfLines(newShelfLines);
+    setUnplacedItems(newUnplacedItems);
   };
 
   return (
