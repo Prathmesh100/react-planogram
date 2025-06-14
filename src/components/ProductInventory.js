@@ -23,6 +23,7 @@ const ProductInventory = ({ unplacedItems, selectedProduct, setSelectedProduct, 
                   style={{
                     borderRadius: '4px',
                     marginBottom: '8px',
+                    marginRight: '8px',
                   }}
                 >
                   <ProductItem provided={provided} snapshot={snapshot} item={item} />

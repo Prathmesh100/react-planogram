@@ -2,7 +2,7 @@ import React from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import ProductItem from './ProductItem';
 
-const ShelfLine = ({ provided, snapshot, shelf, items, shelfIdx, ItemWithTooltip, SHELF_GAP }) => (
+const ShelfLine = ({ provided, snapshot, shelf, items, shelfIdx, ItemWithTooltip, SHELF_GAP, setSelectedProduct }) => (
   <div
     ref={provided.innerRef}
     {...provided.droppableProps}
@@ -26,6 +26,7 @@ const ShelfLine = ({ provided, snapshot, shelf, items, shelfIdx, ItemWithTooltip
               provided={provided}
               snapshot={snapshot}
               item={item}
+              onClick={() => setSelectedProduct(item)}
             />
           </ItemWithTooltip>
         )}

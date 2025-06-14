@@ -2,7 +2,7 @@ import React from 'react';
 import { Droppable } from '@hello-pangea/dnd';
 import ShelfLine from './ShelfLine';
 
-const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip }) => {
+const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct }) => {
   const SHELF_GAP = 32;
   return (
     <div
@@ -41,6 +41,7 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip }) => {
                   shelfIdx={`${shelfIdx}-${subShelfIdx}`}
                   ItemWithTooltip={ItemWithTooltip}
                   SHELF_GAP={SHELF_GAP}
+                  setSelectedProduct={setSelectedProduct}
                 />
               )}
             </Droppable>

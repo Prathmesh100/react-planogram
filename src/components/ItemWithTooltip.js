@@ -24,7 +24,7 @@ const ItemWithTooltip = ({ item, children }) => {
             fontSize: '12px',
             lineHeight: '1.4',
             textAlign: 'left',
-            zIndex: 1000,
+            zIndex: 1000000,
             boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
             border: '1px solid #e0e0e0',
             pointerEvents: 'none',

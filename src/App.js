@@ -304,6 +304,7 @@ function App() {
                 shelves={SHELVES}
                 shelfLines={shelfLines}
                 ItemWithTooltip={ItemWithTooltip}
+                setSelectedProduct={setSelectedProduct}
               />
             </div>
           </div>

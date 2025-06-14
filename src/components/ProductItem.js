@@ -1,10 +1,11 @@
 import React from 'react';
 
-const ProductItem = ({ provided, snapshot, item }) => (
+const ProductItem = ({ provided, snapshot, item, onClick }) => (
   <div
     ref={provided.innerRef}
     {...provided.draggableProps}
     {...provided.dragHandleProps}
+    onClick={onClick}
     style={{
       ...provided.draggableProps.style,
       width: item.width,
@@ -12,11 +13,10 @@ const ProductItem = ({ provided, snapshot, item }) => (
       backgroundColor: snapshot.isDragging ? '#e3f2fd' : 'white',
       border: '1px solid #e0e0e0',
       borderRadius: '4px',
-      marginRight: '8px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      cursor: 'grab',
+      cursor: 'pointer',
       boxShadow: snapshot.isDragging ? '0 8px 25px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.05)'
     }}
   >
