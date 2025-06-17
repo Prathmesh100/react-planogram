@@ -4,6 +4,7 @@ import { Search, Share, Download, Settings, ChevronLeft, ChevronRight, Eye, More
 import PlanogramGrid from './components/PlanogramGrid';
 import ProductInventory from './components/ProductInventory';
 import ItemWithTooltip from './components/ItemWithTooltip';
+import axios from "axios";
 
 const initialShelves = {
   "shelf-1": { name: "Chips & Nachos", height: 120, width: 400, items: [] },
@@ -18,7 +19,7 @@ const initialItems = [
   {
     id: "item-1",
     name: "Chips",
-    image: "/images/chips.png",
+    image: "./assets/chips.png",
     width: 40,
     height: 80,
     bgColor: "#f5deb3",
@@ -122,61 +123,262 @@ const initialItems = [
 ];
 
 
-const SHELVES = [
-  {
-    height: 40,
-    width: 700,
-    subShelves: [
-      { height: 40, width: 350 },
-      { height: 40, width: 350 }
-    ]
-  },
-  {
-    height: 100,
-    width: 200,
-    subShelves: [
-      { height: 100, width: 200 }
-    ]
-  },
-  {
-    height: 80,
-    width: 900,
-    subShelves: [
-      { height: 80, width: 300 },
-      { height: 80, width: 300 },
-      { height: 80, width: 300 }
-    ]
-  },
-  {
-    height: 120,
-    width: 400,
-    subShelves: [
-      { height: 120, width: 200 },
-      { height: 120, width: 200 }
-    ]
-  },
-  {
-    height: 90,
-    width: 600,
-    subShelves: [
-      { height: 90, width: 200 },
-      { height: 90, width: 200 },
-      { height: 90, width: 200 }
-    ]
-  }
-];
+
 const SHELF_GAP = 32;
 
+const EMPTY_SPACE_WIDTH = 20; // Width of each empty space
+const EMPTY_SPACE_MARGIN = 4; // Margin between empty spaces
+
 function App() {
-  // Each shelf line is an array of arrays (one array per sub-shelf)
-  const [shelfLines, setShelfLines] = useState(
-    Array.from({ length: SHELVES.length }, (_, shelfIdx) =>
-      Array.from({ length: SHELVES[shelfIdx].subShelves.length }, () => [])
-    )
-  );
+
+  const [SHELVES, setShelves] = useState([])
+  const [apiProducts, setApiProducts] = useState();
+
+  // Initialize shelfLines with empty arrays when SHELVES is empty
+  const [shelfLines, setShelfLines] = useState([]);
+
+
+  // Update shelfLines whenever SHELVES changes
+ useEffect(() => {
+  if (SHELVES.length > 0 && apiProducts.length > 0) {
+    const newShelfLines = SHELVES.map((shelf, shelfIdx) =>
+      shelf.subShelves.map((subShelf, subShelfIdx) => {
+        const shelfWidth = subShelf.width;
+        const productsForShelf = apiProducts.filter(
+          (product) =>
+            product.shelf - 1 === shelfIdx &&
+            product.bay - 1 === subShelfIdx
+        );
+
+        productsForShelf.sort((a, b) => a.position - b.position);
+
+        const shelfLine = [];
+        let cursor = 0;
+
+        productsForShelf.forEach((product, idx) => {
+          const { product_details, position, facings_wide = 1 } = product;
+
+          const rawWidth = product_details?.width ?? 50;
+          const rawHeight = product_details?.height ?? 50;
+
+          const unitWidth = rawWidth / 5;
+          const height = rawHeight / 5;
+
+          const scaledPosition = (position * 2) % product.shelfwidth;
+
+          // Insert empty space if needed
+          if (scaledPosition > cursor) {
+            shelfLine.push({
+              id: `empty-${shelfIdx}-${subShelfIdx}-${cursor}`,
+              width: scaledPosition - cursor,
+              height: 0,
+              bgColor: '#f0f0f0',
+              isEmpty: true
+            });
+            cursor = scaledPosition;
+          }
+
+          // Add multiple facings of the product
+          for (let i = 0; i < facings_wide; i++) {
+            shelfLine.push({
+              ...product_details,
+              id: `${product.product_id}-${i}`,
+              width: unitWidth,
+              height,
+              isEmpty: false,
+              brand: product_details['tags.brand'],
+              name: product_details.name,
+              description: `${product_details['tags.subgroup']} - ${product_details.name}`,
+              price: `£${(product_details.price || 0).toFixed(2)}`,
+              image_url: product_details.image_url,
+              gtin: product_details.gtin,
+              tpnb: product_details.tpnb,
+              dimensionUom: product_details.dimensionUom,
+              facings_wide: product.facings_wide,
+              facings_high: product.facings_high,
+              total_facings: product.total_facings,
+              orientation: product.orientation,
+              linear: product.linear
+            });
+
+            cursor += unitWidth + 2; // Each facing with padding
+          }
+        });
+
+        // Fill till end of shelf with fixed width empty blocks (20px)
+        while (cursor + 20 <= shelfWidth) {
+          shelfLine.push({
+            id: `empty-${shelfIdx}-${subShelfIdx}-${cursor}-end`,
+            width: 20,
+            height: 0,
+            bgColor: '#f0f0f0',
+            isEmpty: true
+          });
+          cursor += 20;
+        }
+
+        return shelfLine;
+      })
+    );
+
+    setShelfLines(newShelfLines);
+  }
+}, [SHELVES, apiProducts]);
+
+
+
+
+  const groupProductsByShelfAndBay = (products) => {
+    const shelfMap = {};
+    const shelfHeights = {};
+    const shelfProductCounts = {};
+    const shelfMaxBay = {};
+
+    products.forEach((product) => {
+      const { shelf, bay, trayheight, shelfwidth } = product;
+      const shelfKey = `${shelf}`;
+      const shelfBayKey = `${shelf}-${bay}`;
+
+      // Initialize shelf
+      if (!shelfMap[shelf]) {
+        shelfMap[shelf] = {};
+      }
+
+      // Track max bay per shelf
+      if (!shelfMaxBay[shelf]) {
+        shelfMaxBay[shelf] = bay;
+      } else {
+        shelfMaxBay[shelf] = Math.max(shelfMaxBay[shelf], bay);
+      }
+
+      // Track max height per shelf
+      const heightInCm = trayheight;
+      if (!shelfHeights[shelf]) {
+        shelfHeights[shelf] = heightInCm;
+      } else {
+        shelfHeights[shelf] = Math.max(shelfHeights[shelf], heightInCm);
+      }
+
+      // Track number of products per shelf+bay
+      if (!shelfProductCounts[shelfBayKey]) {
+        shelfProductCounts[shelfBayKey] = 0;
+      }
+      shelfProductCounts[shelfBayKey]++;
+    });
+
+    // Build shelf map with all bays up to max
+    Object.keys(shelfMaxBay).forEach((shelf) => {
+      const maxBay = shelfMaxBay[shelf];
+      const height = shelfHeights[shelf];
+
+      for (let bay = 1; bay <= maxBay; bay++) {
+        const key = `${shelf}-${bay}`;
+        const productCount = shelfProductCounts[key] || 0;
+        const totalPadding = productCount * 2;
+
+        const shelfwidth = products.find(
+          (p) => p.shelf === parseInt(shelf) && p.bay === bay
+        )?.shelfwidth ?? 133; // fallback shelfwidth
+
+        if (!shelfMap[shelf][bay]) {
+          shelfMap[shelf][bay] = {};
+        }
+
+        shelfMap[shelf][bay].width = shelfwidth * 2;
+        shelfMap[shelf][bay].height = height * 2;
+      }
+    });
+
+    return shelfMap;
+  };
+
+
+
+
+  // Convert grouped map to structured SHELVES array
+  const buildShelvesFromMap = (shelfMap) => {
+    const shelves = [];
+
+    const shelfNumbers = Object.keys(shelfMap).map(Number).sort((a, b) => a - b);
+
+    shelfNumbers.forEach((shelfNo) => {
+      const bays = shelfMap[shelfNo];
+      const bayNumbers = Object.keys(bays).map(Number).sort((a, b) => a - b);
+
+      const subShelves = bayNumbers.map((bayNo) => ({
+        height: bays[bayNo].height,
+        width: bays[bayNo].width,
+      }));
+
+      const totalWidth = subShelves.reduce((sum, bay) => sum + bay.width, 0);
+      const maxHeight = Math.max(...subShelves.map((b) => b.height));
+
+      shelves.push({
+        height: maxHeight,
+        width: totalWidth,
+        subShelves,
+      });
+    });
+
+    return shelves;
+  };
+  const buildShelvesFromApi = async () => {
+    try {
+      const response = await axios.get("http://localhost:5000/planogramData/scenario%20N3ADAA");
+      const products = response.data;
+      const shelfMap = groupProductsByShelfAndBay(products);
+      const dynamicShelves = buildShelvesFromMap(shelfMap);
+      console.log(dynamicShelves)
+      setShelves(dynamicShelves)
+      setApiProducts(products);
+    } catch (error) {
+      console.error("Failed to fetch and build shelves:", error);
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    buildShelvesFromApi()
+  }, [])
+
   const [unplacedItems, setUnplacedItems] = useState(initialItems);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [viewMode, setViewMode] = useState('98%');
+
+  // Function to create empty spaces for a shelf
+  const createEmptySpaces = (shelfIdx, subShelfIdx, availableWidth) => {
+    const totalSpaceWidth = EMPTY_SPACE_WIDTH + EMPTY_SPACE_MARGIN;
+    const numEmptySpaces = Math.floor(availableWidth / totalSpaceWidth);
+
+    if (numEmptySpaces <= 0) return [];
+
+    const remainingSpace = availableWidth - (numEmptySpaces * totalSpaceWidth);
+    const spaces = [];
+
+    // Create standard empty spaces
+    for (let i = 0; i < numEmptySpaces - 1; i++) {
+      spaces.push({
+        id: `empty-${shelfIdx}-${subShelfIdx}-${Date.now()}-${i}`,
+        width: EMPTY_SPACE_WIDTH,
+        height: 0,
+        bgColor: '#f0f0f0',
+        isEmpty: true
+      });
+    }
+
+    // Add the last space with remaining width
+    if (numEmptySpaces > 0) {
+      spaces.push({
+        id: `empty-${shelfIdx}-${subShelfIdx}-${Date.now()}-${numEmptySpaces - 1}`,
+        width: EMPTY_SPACE_WIDTH + remainingSpace,
+        height: 0,
+        bgColor: '#f0f0f0',
+        isEmpty: true
+      });
+    }
+
+    return spaces;
+  };
 
   const onDragEnd = (result) => {
     const { source, destination } = result;
@@ -191,72 +393,311 @@ function App() {
       item = shelfLines[shelfIdx][subShelfIdx][source.index];
     }
 
-    // Dropping onto a shelf line
-    if (destination.droppableId.startsWith('shelf-line-')) {
-      const [destShelfIdx, destSubShelfIdx] = destination.droppableId.replace('shelf-line-', '').split('-').map(Number);
-      const destShelf = shelfLines[destShelfIdx][destSubShelfIdx];
-      const ITEM_MARGIN = 4;
-
-      // Calculate total width of items in the sub-shelf
-      let occupiedWidth = destShelf.reduce((sum, i) => sum + i.width, 0);
-      let itemCount = destShelf.length;
-
-      // If moving within the same shelf, exclude the item's width from the total
-      if (source.droppableId === destination.droppableId) {
-        occupiedWidth -= item.width;
-        itemCount -= 1;
-      }
-
-      const SPACING_BUFFER = itemCount > 0 ? ITEM_MARGIN * (itemCount + 1) : 0;
-      const totalOccupiedWidth = occupiedWidth + item.width + SPACING_BUFFER;
-
-      if (totalOccupiedWidth > SHELVES[destShelfIdx].subShelves[destSubShelfIdx].width) {
-        alert(`❌ Not enough horizontal space on this shelf for '${item.name}'.`);
-        return;
-      }
-      if (item.height > SHELVES[destShelfIdx].subShelves[destSubShelfIdx].height) {
-        alert(`❌ '${item.name}' is too tall for this shelf (max height: ${SHELVES[destShelfIdx].subShelves[destSubShelfIdx].height}px).`);
-        return;
-      }
-    }
-
     // Create new arrays to avoid mutating state directly
     const newShelfLines = shelfLines.map(shelf => shelf.map(subShelf => [...subShelf]));
     const newUnplacedItems = [...unplacedItems];
 
+    // Helper function to create an empty space
+    const createEmptySpace = (shelfIdx, subShelfIdx) => ({
+      id: `empty-${shelfIdx}-${subShelfIdx}-${Date.now()}`,
+      width: EMPTY_SPACE_WIDTH,
+      height: 0,
+      bgColor: '#f0f0f0',
+      isEmpty: true
+    });
+
+    const isWithinShelfWidth = (shelfIdx, subShelfIdx, position, itemWidth, source) => {
+      const shelfRow = shelfLines[shelfIdx][subShelfIdx];
+      let availableWidth = 0;
+      let currentIndex = position;
+
+      while (currentIndex < shelfRow.length && availableWidth < itemWidth) {
+        const slot = shelfRow[currentIndex];
+
+        const isSameItemBeingMoved =
+          source.droppableId === `shelf-line-${shelfIdx}-${subShelfIdx}` &&
+          currentIndex === source.index;
+
+        if (isSameItemBeingMoved) {
+          availableWidth += itemWidth;
+        } else if (slot?.isEmpty) {
+          availableWidth += slot.width;
+        } else {
+          break;
+        }
+        currentIndex++;
+      }
+
+      return availableWidth >= itemWidth;
+    };
+
+
+
+
+    // Helper function to check if we can place an item at a position
+    const canPlaceItem = (shelf, item, position, shelfIdx, subShelfIdx) => {
+      // Check if item would fit within shelf width
+      if (!isWithinShelfWidth(shelfIdx, subShelfIdx, position, item.width, source)) {
+        return false;
+      }
+
+      // If moving the same item to the same position, allow it
+      const isMovingSameItem = source.droppableId.startsWith('shelf-line-') &&
+        destination.droppableId.startsWith('shelf-line-') &&
+        source.index === position;
+
+      if (isMovingSameItem) {
+        return true;
+      }
+
+      for (let i = position; i < position + item.width; i++) {
+        if (i >= shelf.length) return false; // Out of bounds
+
+        const currentItem = shelf[i];
+        if (currentItem && !currentItem.isEmpty) {
+          return false; // Would overlap with non-empty item
+        }
+      }
+      return true;
+    };
+
     // Handle drag from inventory to shelf
     if (source.droppableId === 'items' && destination.droppableId.startsWith('shelf-line-')) {
       const [shelfIdx, subShelfIdx] = destination.droppableId.replace('shelf-line-', '').split('-').map(Number);
+      const destShelf = newShelfLines[shelfIdx][subShelfIdx];
+
+      if (!isWithinShelfWidth(shelfIdx, subShelfIdx, destination.index, item.width, source)) {
+        alert(`❌ Cannot place '${item.name}' here - would exceed shelf width.`);
+        return;
+      }
+
+      let totalWidth = 0;
+      let endIndex = destination.index;
+
+      while (endIndex < destShelf.length && totalWidth < item.width) {
+        const slot = destShelf[endIndex];
+
+        // Stop if we hit a non-empty item that isn't the one being moved (for safety)
+        if (!slot?.isEmpty) break;
+
+        totalWidth += slot.width;
+        endIndex++;
+      }
+
+      // If we didn't collect enough space, cancel placement
+      if (totalWidth < item.width) {
+        alert(`❌ Not enough consecutive empty space for '${item.name}'`);
+        return;
+      }
+
+      // Remove all consumed empty slots and insert item
+      destShelf.splice(destination.index, endIndex - destination.index, item);
+
+      // Add back leftover space if item didn't use all the empty width
+      const leftover = totalWidth - item.width;
+      if (leftover > 0) {
+        destShelf.splice(destination.index + 1, 0, {
+          id: `empty-${shelfIdx}-${subShelfIdx}-${Date.now()}`,
+          width: leftover,
+          height: 0,
+          bgColor: '#f0f0f0',
+          isEmpty: true,
+        });
+      }
+
+      // Remove from inventory
       newUnplacedItems.splice(source.index, 1);
-      newShelfLines[shelfIdx][subShelfIdx].splice(destination.index, 0, item);
     }
+
     // Handle drag from shelf to inventory
     else if (source.droppableId.startsWith('shelf-line-') && destination.droppableId === 'items') {
       const [shelfIdx, subShelfIdx] = source.droppableId.replace('shelf-line-', '').split('-').map(Number);
-      newShelfLines[shelfIdx][subShelfIdx].splice(source.index, 1);
-      newUnplacedItems.splice(destination.index, 0, item);
+      const sourceShelf = newShelfLines[shelfIdx][subShelfIdx];
+
+      // Remove the item
+      const removedItem = sourceShelf.splice(source.index, 1)[0];
+
+      const emptySpaces = [];
+      let remainingWidth = removedItem.width;
+      const defaultHeight = 0;
+
+      while (remainingWidth > 0) {
+        const thisWidth = Math.min(remainingWidth, EMPTY_SPACE_WIDTH + EMPTY_SPACE_MARGIN - 2);
+        emptySpaces.push({
+          id: `empty-${shelfIdx}-${subShelfIdx}-${Date.now()}-${Math.random()}`, // Ensure uniqueness
+          width: thisWidth,
+          height: defaultHeight,
+          bgColor: '#f0f0f0',
+          isEmpty: true,
+        });
+        remainingWidth -= thisWidth;
+      }
+
+      // Insert all empty spaces where the item was
+      sourceShelf.splice(source.index, 0, ...emptySpaces);
+
+      // Add item back to unplacedItems
+      newUnplacedItems.splice(destination.index, 0, removedItem);
     }
+
     // Handle moving within inventory
     else if (source.droppableId === 'items' && destination.droppableId === 'items') {
       const [moved] = newUnplacedItems.splice(source.index, 1);
       newUnplacedItems.splice(destination.index, 0, moved);
     }
     // Handle moving within or between shelves
-    else if (source.droppableId.startsWith('shelf-line-') && destination.droppableId.startsWith('shelf-line-')) {
-      const [srcShelfIdx, srcSubShelfIdx] = source.droppableId.replace('shelf-line-', '').split('-').map(Number);
-      const [destShelfIdx, destSubShelfIdx] = destination.droppableId.replace('shelf-line-', '').split('-').map(Number);
-      
-      newShelfLines[srcShelfIdx][srcSubShelfIdx].splice(source.index, 1);
-      newShelfLines[destShelfIdx][destSubShelfIdx].splice(destination.index, 0, item);
+    else if (
+      source.droppableId.startsWith("shelf-line-") &&
+      destination.droppableId.startsWith("shelf-line-")
+    ) {
+      const [srcShelfIdx, srcSubShelfIdx] = source.droppableId.replace("shelf-line-", "").split("-").map(Number);
+      const [destShelfIdx, destSubShelfIdx] = destination.droppableId.replace("shelf-line-", "").split("-").map(Number);
+
+      const sourceShelf = newShelfLines[srcShelfIdx][srcSubShelfIdx];
+      const destShelf = newShelfLines[destShelfIdx][destSubShelfIdx];
+
+      const isSamePosition =
+        source.index === destination.index &&
+        srcShelfIdx === destShelfIdx &&
+        srcSubShelfIdx === destSubShelfIdx;
+
+      if (isSamePosition) return;
+
+      // 🔁 1. Remove item from source
+      const [removedItem] = sourceShelf.splice(source.index, 1);
+
+      // 🔁 2. Add empty space in source
+      let remainingWidth = removedItem.width;
+      const emptySpaces = [];
+      while (remainingWidth > 0) {
+        const thisWidth = Math.min(remainingWidth, EMPTY_SPACE_WIDTH + EMPTY_SPACE_MARGIN - 2);
+        emptySpaces.push({
+          id: `empty-${srcShelfIdx}-${srcSubShelfIdx}-${Date.now()}-${Math.random()}`,
+          width: thisWidth,
+          height: 0,
+          bgColor: "#f0f0f0",
+          isEmpty: true,
+        });
+        remainingWidth -= thisWidth;
+      }
+      sourceShelf.splice(source.index, 0, ...emptySpaces);
+
+      // 🔁 3. Replace multiple empty slots in dest with item
+      let totalWidth = 0;
+      let endIndex = destination.index;
+
+      while (endIndex < destShelf.length && totalWidth < removedItem.width) {
+        const cell = destShelf[endIndex];
+        if (!cell?.isEmpty) break;
+        totalWidth += cell.width;
+        endIndex++;
+      }
+
+      if (totalWidth < removedItem.width) {
+        alert(`❌ Not enough space to place '${removedItem.name}'.`);
+        return;
+      }
+
+      // Remove the consumed empty slots
+      destShelf.splice(destination.index, endIndex - destination.index, removedItem);
+
+      // Add leftover empty space (if consumed more than item width)
+      const leftover = totalWidth - removedItem.width;
+      if (leftover > 0) {
+        destShelf.splice(destination.index + 1, 0, {
+          id: `empty-${destShelfIdx}-${destSubShelfIdx}-${Date.now()}-${Math.random()}`,
+          width: leftover,
+          height: 0,
+          bgColor: "#f0f0f0",
+          isEmpty: true,
+        });
+      }
     }
+
 
     // Update state with new arrays
     setShelfLines(newShelfLines);
     setUnplacedItems(newUnplacedItems);
   };
 
+  // Function to generate payload with positions
+  const generatePayload = () => {
+    const payload = {
+      shelves: shelfLines.map((shelfLine, shelfIdx) => ({
+        shelfId: `shelf-${shelfIdx + 1}`,
+        name: SHELVES[shelfIdx].name || `Shelf ${shelfIdx + 1}`,
+        subShelves: shelfLine.map((subShelf, subShelfIdx) => {
+          // Calculate positions for non-empty items
+          const items = subShelf.reduce((acc, item, index) => {
+            if (!item.isEmpty) {
+              // Calculate x position based on index and item widths
+              let xPosition = 0;
+              for (let i = 0; i < index; i++) {
+                xPosition += subShelf[i].width + EMPTY_SPACE_MARGIN;
+              }
+
+              acc.push({
+                id: item.id,
+                name: item.name,
+                position: {
+                  x: xPosition / 2,
+                  y: 0, // Since items are in a single row, y is always 0
+                  width: item.width * 5,
+                  height: item.height * 5
+                },
+                metadata: {
+                  brand: item.brand,
+                  price: item.price,
+                  description: item.description
+                }
+              });
+            }
+            return acc;
+          }, []);
+
+          return {
+            subShelfId: `subshelf-${shelfIdx + 1}-${subShelfIdx + 1}`,
+            width: SHELVES[shelfIdx].subShelves[subShelfIdx].width,
+            height: SHELVES[shelfIdx].subShelves[subShelfIdx].height,
+            items: items
+          };
+        })
+      }))
+    };
+
+    console.log('Planogram Payload:', JSON.stringify(payload, null, 2));
+    return payload;
+  };
+
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+      <div style={{
+        padding: '16px',
+        backgroundColor: 'white',
+        borderBottom: '1px solid #e0e0e0',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <h1 style={{ margin: 0, fontSize: '20px', color: '#2c3e50' }}>Planogram Editor</h1>
+        <button
+          onClick={generatePayload}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#3498db',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Download size={16} />
+          Export Planogram
+        </button>
+      </div>
 
       <div style={{ display: 'flex', height: 'calc(100vh - 60px)' }}>
         {/* Main Content */}
@@ -344,11 +785,23 @@ function App() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '48px',
                 marginBottom: '20px',
-                border: '1px solid #e0e0e0'
+                border: '1px solid #e0e0e0',
+                overflow: 'hidden'
               }}>
-                📦
+                {selectedProduct.image_url ? (
+                  <img
+                    src={selectedProduct.image_url}
+                    alt={selectedProduct.name}
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      objectFit: 'contain'
+                    }}
+                  />
+                ) : (
+                  <div style={{ fontSize: '48px' }}>📦</div>
+                )}
               </div>
 
               <div style={{ marginBottom: '16px' }}>
@@ -408,7 +861,7 @@ function App() {
                     Width
                   </div>
                   <div style={{ fontSize: '14px', fontWeight: '600', color: '#2c3e50' }}>
-                    {selectedProduct.width}px
+                    {selectedProduct.width * 5} {selectedProduct.dimensionUom}
                   </div>
                 </div>
                 <div style={{
@@ -420,7 +873,31 @@ function App() {
                     Height
                   </div>
                   <div style={{ fontSize: '14px', fontWeight: '600', color: '#2c3e50' }}>
-                    {selectedProduct.height}px
+                    {selectedProduct.height * 5} {selectedProduct.dimensionUom}
+                  </div>
+                </div>
+                <div style={{
+                  padding: '12px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '6px'
+                }}>
+                  <div style={{ fontSize: '11px', color: '#7f8c8d', marginBottom: '4px' }}>
+                    Facings
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#2c3e50' }}>
+                    {selectedProduct.total_facings} ({selectedProduct.facings_wide}×{selectedProduct.facings_high})
+                  </div>
+                </div>
+                <div style={{
+                  padding: '12px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '6px'
+                }}>
+                  <div style={{ fontSize: '11px', color: '#7f8c8d', marginBottom: '4px' }}>
+                    Linear
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#2c3e50' }}>
+                    {selectedProduct.linear} cm
                   </div>
                 </div>
               </div>
@@ -432,10 +909,13 @@ function App() {
                 border: '1px solid #e3f2fd'
               }}>
                 <div style={{ fontSize: '11px', color: '#7f8c8d', marginBottom: '4px' }}>
-                  Product ID
+                  Product Details
                 </div>
                 <div style={{ fontSize: '12px', fontFamily: 'monospace', color: '#2c3e50' }}>
-                  {selectedProduct.id}
+                  <div>ID: {selectedProduct.id}</div>
+                  <div>TPNB: {selectedProduct.tpnb}</div>
+                  <div>GTIN: {selectedProduct.gtin}</div>
+                  <div>Orientation: {selectedProduct.orientation}°</div>
                 </div>
               </div>
             </div>

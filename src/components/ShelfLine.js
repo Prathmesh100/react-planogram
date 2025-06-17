@@ -21,14 +21,12 @@ const ShelfLine = ({ provided, snapshot, shelf, items, shelfIdx, ItemWithTooltip
     {items.map((item, itemIdx) => (
       <Draggable draggableId={item.id} index={itemIdx} key={item.id}>
         {(provided, snapshot) => (
-          <ItemWithTooltip item={item}>
             <ProductItem
               provided={provided}
               snapshot={snapshot}
               item={item}
               onClick={() => setSelectedProduct(item)}
             />
-          </ItemWithTooltip>
         )}
       </Draggable>
     ))}
