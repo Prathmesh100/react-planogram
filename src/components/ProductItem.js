@@ -30,7 +30,7 @@ const ProductItem = ({ provided, snapshot, item, onClick }) => {
         <img
           src={item.image_url}
           alt={item.name || 'product'}
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover',mixBlendMode: 'multiply' }}
           onError={() => setImageError(true)}
         />
       ) : (
