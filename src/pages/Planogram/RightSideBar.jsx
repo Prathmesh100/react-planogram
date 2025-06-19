@@ -7,7 +7,8 @@ const RightSideBar = ({selectedProduct}) => {
           width: '320px',
           backgroundColor: 'white',
           borderLeft: '1px solid #e0e0e0',
-          padding: '20px'
+          padding: '20px',
+          overflowY: 'auto',
         }}>
           <div style={{
             display: 'flex',

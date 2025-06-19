@@ -69,12 +69,20 @@ const ZoomableContainer = ({ children }) => {
         overflow: 'hidden',
         position: 'relative',
         cursor: isDragging.current ? 'grabbing' : 'default',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}
     >
       <div
         style={{
           transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
-          transformOrigin: 'top left',
+          transformOrigin: 'center center',
+          minWidth: '100%',
+          minHeight: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}
       >
         {children}

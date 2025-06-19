@@ -1,10 +1,23 @@
 import React, { useEffect, useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Search, Share, Download, Settings, ChevronLeft, ChevronRight, Eye, MoreVertical } from "lucide-react";
+import { Search, Share, Download, Settings, ChevronLeft, ChevronRight, Eye, MoreVertical, Maximize2 } from "lucide-react";
+import { toast } from 'react-toastify';
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  Button,
+  Box,
+  Paper,
+  IconButton,
+  Container,
+  Divider
+} from '@mui/material';
 import PlanogramGrid from './components/PlanogramGrid';
 import ProductInventory from './components/ProductInventory';
 import ItemWithTooltip from './components/ItemWithTooltip';
 import RightSideBar from "./pages/Planogram/RightSideBar";
+import FullscreenView from './components/FullscreenView';
 import { initialItems } from "./utils/initialItems";
 import { buildShelvesFromApi } from "./utils/apiUtils";
 
@@ -40,10 +53,10 @@ function App() {
             const rawWidth = product_details?.width ?? 50;
             const rawHeight = product_details?.height ?? 50;
 
-            const unitWidth = (rawWidth / 5)  ;
+            const unitWidth = (rawWidth / 5);
             const height = rawHeight / 5;
 
-            const scaledPosition = (position * 2) % product.shelfwidth;
+            const scaledPosition = Math.min((position * 2) % product.shelfwidth, product.shelfwidth);
 
             // Insert empty space if needed
             if (scaledPosition > cursor) {
@@ -56,6 +69,7 @@ function App() {
               });
               cursor = scaledPosition;
             }
+            // console.log(scaledPosition,cursor)
 
             // Add multiple facings of the product
             for (let i = 0; i < facings_wide; i++) {
@@ -80,21 +94,31 @@ function App() {
                 linear: product.linear
               });
 
-              cursor += unitWidth + 2; // Each facing with padding
+              cursor += unitWidth; // Each facing with padding
             }
           });
 
+          const remainingWidth = shelfWidth - cursor;
+          console.log(cursor, shelfWidth, remainingWidth);
+
+
           // Fill till end of shelf with fixed width empty blocks (20px)
-          while (cursor + 20 <= shelfWidth) {
+          // Fill till end of shelf with fixed-width empty blocks (max 20px per block)
+          while (cursor < shelfWidth) {
+            const remaining = shelfWidth - cursor;
+            const blockWidth = Math.min(20, remaining); // Prevent overflow
+
             shelfLine.push({
               id: `empty-${shelfIdx}-${subShelfIdx}-${cursor}-end`,
-              width: 20,
+              width: blockWidth,
               height: 0,
               bgColor: '#f0f0f0',
               isEmpty: true
             });
-            cursor += 20;
+
+            cursor += blockWidth;
           }
+
 
           return shelfLine;
         })
@@ -115,7 +139,7 @@ function App() {
 
   const [unplacedItems, setUnplacedItems] = useState(initialItems);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [viewMode, setViewMode] = useState('98%');
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
 
   const onDragEnd = (result) => {
@@ -168,7 +192,7 @@ function App() {
       const destShelf = newShelfLines[shelfIdx][subShelfIdx];
 
       if (!isWithinShelfWidth(shelfIdx, subShelfIdx, destination.index, item.width, source)) {
-        alert(`❌ Cannot place '${item.name}' here - would exceed shelf width.`);
+        toast.error(`Cannot place '${item.name}' here - would exceed shelf width.`);
         return;
       }
 
@@ -187,7 +211,7 @@ function App() {
 
       // If we didn't collect enough space, cancel placement
       if (totalWidth < item.width) {
-        alert(`❌ Not enough consecutive empty space for '${item.name}'`);
+        toast.error(`Not enough consecutive empty space for '${item.name}'`);
         return;
       }
 
@@ -292,7 +316,7 @@ function App() {
       }
 
       if (totalWidth < removedItem.width) {
-        alert(`❌ Not enough space to place '${removedItem.name}'.`);
+        toast.error(`Not enough space to place '${removedItem.name}'.`);
         return;
       }
 
@@ -330,7 +354,7 @@ function App() {
               // Calculate x position based on index and item widths
               let xPosition = 0;
               for (let i = 0; i < index; i++) {
-                xPosition += subShelf[i].width + EMPTY_SPACE_MARGIN;
+                xPosition += subShelf[i].width;
               }
 
               acc.push({
@@ -367,91 +391,87 @@ function App() {
   };
 
   return (
-    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
-      <div style={{
-        padding: '16px',
-        backgroundColor: 'white',
-        borderBottom: '1px solid #e0e0e0',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <h1 style={{ margin: 0, fontSize: '20px', color: '#2c3e50' }}>Planogram Editor</h1>
-        <button
-          onClick={generatePayload}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#3498db',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Download size={16} />
-          Export Planogram
-        </button>
-      </div>
+    <Box sx={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+      <AppBar position="static" color="default" elevation={1}>
+        <Toolbar>
+          <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
+            Planogram Editor
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="contained"
+              startIcon={<Maximize2 size={16} />}
+              onClick={() => setIsFullscreen(true)}
+            >
+              Fullscreen View
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<Download size={16} />}
+              onClick={generatePayload}
+            >
+              Export Planogram
+            </Button>
+          </Box>
+        </Toolbar>
+      </AppBar>
 
-      <div style={{ display: 'flex', height: 'calc(100vh - 60px)' }}>
-        {/* Main Content */}
+      <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
         <DragDropContext onDragEnd={onDragEnd}>
-          <div style={{ flex: 1, display: 'flex' }}>
+          <Box sx={{ flex: 1, display: 'flex' }}>
             {/* Left Sidebar - Products */}
-            <div style={{
-              width: '280px',
-              backgroundColor: 'white',
-              borderRight: '1px solid #e0e0e0',
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
-              <div style={{
-                padding: '16px',
-                borderBottom: '1px solid #e0e0e0',
-                backgroundColor: '#f8f9fa'
-              }}>
-                <h3 style={{
-                  margin: '0 0 8px 0',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  color: '#2c3e50'
-                }}>
+            <Paper
+              elevation={0}
+              sx={{
+                width: '280px',
+                borderRight: '1px solid #e0e0e0',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+            >
+              <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0', bgcolor: '#f8f9fa' }}>
+                <Typography variant="h6" sx={{ mb: 1, fontSize: '16px', fontWeight: '600', color: '#2c3e50' }}>
                   📦 Product Inventory
-                </h3>
-                <div style={{
-                  fontSize: '12px',
-                  color: '#7f8c8d'
-                }}>
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#7f8c8d' }}>
                   {unplacedItems.length} items available
-                </div>
-              </div>
+                </Typography>
+              </Box>
               <ProductInventory
                 unplacedItems={unplacedItems}
                 selectedProduct={selectedProduct}
                 setSelectedProduct={setSelectedProduct}
                 ItemWithTooltip={ItemWithTooltip}
               />
-            </div>
+            </Paper>
 
             {/* Center - Planogram Grid */}
-            <div style={{ flex: 1, backgroundColor: '#f8f9fa', padding: '20px', overflowY: 'auto', }}>
+            <Box sx={{ flex: 1, bgcolor: '#f8f9fa', p: 2.5, overflowY: 'auto', }}>
               <PlanogramGrid
                 shelves={SHELVES}
                 shelfLines={shelfLines}
                 ItemWithTooltip={ItemWithTooltip}
                 setSelectedProduct={setSelectedProduct}
               />
-            </div>
-          </div>
+            </Box>
+          </Box>
         </DragDropContext>
 
         {/* Right Sidebar - Product Details */}
         <RightSideBar selectedProduct={selectedProduct} />
-      </div>
-    </div>
+      </Box>
+
+      {/* Fullscreen View */}
+      {isFullscreen && (
+        <FullscreenView
+          shelves={SHELVES}
+          shelfLines={shelfLines}
+          ItemWithTooltip={ItemWithTooltip}
+          setSelectedProduct={setSelectedProduct}
+          onClose={() => setIsFullscreen(false)}
+        />
+      )}
+    </Box>
   );
 }
 

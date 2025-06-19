@@ -2,8 +2,9 @@ import React from 'react';
 import { Droppable } from '@hello-pangea/dnd';
 import ShelfLine from './ShelfLine';
 
-const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct,viewMode }) => {
+const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct, isViewOnly }) => {
   const SHELF_GAP = 32;
+  const MAX_WIDTH = 850; // Maximum width for the main planogram
 
   // Return early if shelves or shelfLines is empty
   if (!shelves || !shelfLines || shelves.length === 0 || shelfLines.length === 0) {
@@ -26,52 +27,96 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduc
     );
   }
 
+  const maxWidth = Math.max(...shelves.map((s) => s.width + 20));
+
   return (
     <div
       style={{
-        width: Math.max(...shelves.map((s) => s.width+20)),
+        width: isViewOnly ? maxWidth : '100%',
+        maxWidth: isViewOnly ? 'none' : MAX_WIDTH,
         margin: '0 auto',
         background: '#e0e0e0',
         borderRadius: '8px',
-        padding: '24px 0',
+        padding: '24px 20px',
         position: 'relative',
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-        scale:viewMode
-
+        ...(isViewOnly ? {
+          transform: 'scale(1)',
+          transformOrigin: 'top left'
+        } : {
+          overflowX: 'auto',
+          overflowY: 'hidden'
+        })
       }}
     >
-      {shelves.map((shelf, shelfIdx) => (
-        <div
-          key={shelfIdx}
-          style={{
-            display: 'flex',
-            gap: '4px',
-            padding: '0 4px',
-            marginBottom: SHELF_GAP
-          }}
-        >
-          {shelf.subShelves.map((subShelf, subShelfIdx) => (
-            <Droppable
-              droppableId={`shelf-line-${shelfIdx}-${subShelfIdx}`}
-              direction="horizontal"
-              key={`${shelfIdx}-${subShelfIdx}`}
-            >
-              {(provided, snapshot) => (
+      <div style={{
+        width: isViewOnly ? '100%' : maxWidth,
+        minWidth: isViewOnly ? '100%' : MAX_WIDTH,
+        position: 'relative'
+      }}>
+        {shelves.map((shelf, shelfIdx) => (
+          <div
+            key={shelfIdx}
+            style={{
+              display: 'flex',
+              gap: '4px',
+              padding: '0 4px',
+              marginBottom: SHELF_GAP,
+              position: 'relative',
+            }}
+          >
+            {shelf.subShelves.map((subShelf, subShelfIdx) => {
+              const shelfContent = (
                 <ShelfLine
-                  provided={provided}
-                  snapshot={snapshot}
                   shelf={subShelf}
                   items={shelfLines[shelfIdx]?.[subShelfIdx] || []}
                   shelfIdx={`${shelfIdx}-${subShelfIdx}`}
                   ItemWithTooltip={ItemWithTooltip}
                   SHELF_GAP={SHELF_GAP}
                   setSelectedProduct={setSelectedProduct}
+                  isViewOnly={isViewOnly}
                 />
-              )}
-            </Droppable>
-          ))}
-        </div>
-      ))}
+              );
+
+              if (isViewOnly) {
+                return (
+                  <div 
+                    key={`${shelfIdx}-${subShelfIdx}`}
+                    style={{
+                      position: 'relative',
+                      width: subShelf.width,
+                      height: subShelf.height
+                    }}
+                  >
+                    {shelfContent}
+                  </div>
+                );
+              }
+
+              return (
+                <Droppable
+                  droppableId={`shelf-line-${shelfIdx}-${subShelfIdx}`}
+                  direction="horizontal"
+                  key={`${shelfIdx}-${subShelfIdx}`}
+                >
+                  {(provided, snapshot) => (
+                    <ShelfLine
+                      provided={provided}
+                      snapshot={snapshot}
+                      shelf={subShelf}
+                      items={shelfLines[shelfIdx]?.[subShelfIdx] || []}
+                      shelfIdx={`${shelfIdx}-${subShelfIdx}`}
+                      ItemWithTooltip={ItemWithTooltip}
+                      SHELF_GAP={SHELF_GAP}
+                      setSelectedProduct={setSelectedProduct}
+                    />
+                  )}
+                </Droppable>
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
