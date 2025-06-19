@@ -1,48 +1,69 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, ZoomIn, ZoomOut, RotateCcw, Maximize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { DragDropContext } from '@hello-pangea/dnd';
 import PlanogramGrid from './PlanogramGrid';
 
 const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct, onClose }) => {
+  const SHELF_GAP = 32;
+  const CONTAINER_PADDING = 20;
+  
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [focusedBay, setFocusedBay] = useState(null);
+  const [shouldCenter, setShouldCenter] = useState(false);
   const containerRef = useRef(null);
+  const contentRef = useRef(null);
   const lastTouchX = useRef(0);
 
   // Calculate initial scale based on number of bays and shelves
   const calculateInitialScale = () => {
-  const numBays = shelves.length;
-  const numShelves = shelfLines.length;
+    if (!containerRef.current || !contentRef.current) return 1;
 
-  let scale = 1;
+    const container = containerRef.current;
+    const content = contentRef.current;
 
-  // Scale based on number of bays (horizontal space)
-  if (numBays <= 2) {
-    scale = 1;
-  } else if (numBays === 3) {
-    scale = 0.95;
-  } else if (numBays === 4) {
-    scale = 0.9;
-  } else if (numBays <= 6) {
-    scale = 0.85;
-  } else {
-    scale = 0.8; // many bays
-  }
+    const containerWidth = container.clientWidth - (2 * CONTAINER_PADDING);
+    const containerHeight = container.clientHeight - (2 * CONTAINER_PADDING);
+    const contentWidth = content.scrollWidth;
+    const contentHeight = content.scrollHeight;
 
-  // Scale further based on number of shelves (vertical space)
-  if (numShelves > 4 && numShelves <= 6) {
-    scale *= 0.9;
-  } else if (numShelves > 6) {
-    scale *= 0.8;
-  }
+    // Calculate scale based on both dimensions
+    const scaleX = containerWidth / contentWidth;
+    const scaleY = containerHeight / contentHeight;
 
-  // Clamp the scale to prevent too small or too large zoom
-  return Math.max(0.6, Math.min(scale, 1));
-};
+    // Use the smaller scale to ensure content fits both dimensions
+    return Math.min(scaleX, scaleY, 1);
+  };
+
+  // Center the content initially
+  const centerContent = () => {
+    if (!containerRef.current || !contentRef.current) return;
+
+    const container = containerRef.current;
+    const content = contentRef.current;
+
+    const containerWidth = container.clientWidth - (2 * CONTAINER_PADDING);
+    const containerHeight = container.clientHeight - (2 * CONTAINER_PADDING);
+    const contentWidth = content.scrollWidth * scale;
+    const contentHeight = content.scrollHeight * scale;
+
+    const x = (containerWidth - contentWidth) / 2;
+    const y = (containerHeight - contentHeight) / 2;
+
+    setPosition({ x, y });
+  };
 
   useEffect(() => {
-    setScale(calculateInitialScale());
+    // Wait for refs to be available
+    if (containerRef.current && contentRef.current) {
+      const newScale = calculateInitialScale();
+      setScale(newScale);
+      
+      // Center content after scale is set
+      setTimeout(centerContent, 0);
+    }
   }, [shelves, shelfLines]);
 
   const handleTouchStart = (e) => {
@@ -94,8 +115,54 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
   };
 
   const handleReset = () => {
-    setScale(calculateInitialScale());
-    setPosition({ x: 0, y: 0 });
+    const newScale = calculateInitialScale();
+    setScale(newScale);
+    setShouldCenter(true);
+    setFocusedBay(null);
+  };
+
+  const handleBayClick = (shelfIdx, bayIndex) => {
+    // If already focused on this bay, reset the view
+    if (focusedBay?.shelfIndex === shelfIdx && focusedBay?.bayIndex === bayIndex) {
+      handleReset();
+      return;
+    }
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Calculate the bay's position relative to the content
+    let bayX = CONTAINER_PADDING; // Start with container padding
+    let bayY = CONTAINER_PADDING;
+
+    // Add widths of previous bays in the same shelf
+    for (let i = 0; i < bayIndex; i++) {
+      bayX += shelves[shelfIdx].subShelves[i].width;
+    }
+
+    // Add heights of previous shelves
+    for (let i = 0; i < shelfIdx; i++) {
+      bayY += Math.max(...shelves[i].subShelves.map(s => s.height)) + SHELF_GAP;
+    }
+
+    // Get bay dimensions
+    const bayWidth = shelves[shelfIdx].subShelves[bayIndex].width;
+    const bayHeight = shelves[shelfIdx].subShelves[bayIndex].height;
+
+    // Container dimensions
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+
+    // Set zoom level
+    const zoomLevel = 2;
+    
+    // Calculate position to center the bay
+    const targetX = (containerWidth / 2) - (bayX + bayWidth / 2) * zoomLevel;
+    const targetY = (containerHeight / 2) - (bayY + bayHeight / 2) * zoomLevel;
+
+    setScale(zoomLevel);
+    setPosition({ x: targetX, y: targetY });
+    setFocusedBay({ shelfIndex: shelfIdx, bayIndex });
   };
 
   const handleNavigate = (direction) => {
@@ -150,6 +217,19 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
     transition: 'background-color 0.2s'
   };
 
+  // Add onDragEnd handler for DragDropContext
+  const onDragEnd = () => {
+    // In fullscreen view, we don't allow dragging
+    return;
+  };
+
+  useEffect(() => {
+    if (shouldCenter) {
+      centerContent();
+      setShouldCenter(false);
+    }
+  }, [scale, shouldCenter]);
+
   return (
     <div style={{
       position: 'fixed',
@@ -186,7 +266,7 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
           zIndex: 1000
         }}>
-          Close fullscreen mode to access product editing and details.
+          Click on any bay to zoom in. Click again to reset view.
         </div>
         <button
           onClick={onClose}
@@ -199,11 +279,7 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'background-color 0.2s',
-            ':hover': {
-              backgroundColor: 'rgba(255, 255, 255, 0.2)'
-            }
+            gap: '4px'
           }}
         >
           <X size={20} />
@@ -215,139 +291,66 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
         ref={containerRef}
         style={{
           flex: 1,
-          backgroundColor: 'white',
-          borderRadius: '12px',
           overflow: 'hidden',
           position: 'relative',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
-          cursor: isDragging ? 'grabbing' : 'grab'
+          backgroundColor: '#f8f9fa',
+          borderRadius: '12px',
+          cursor: isDragging ? 'grabbing' : 'grab',
+          padding: `${CONTAINER_PADDING}px`
         }}
       >
-
-
-        {/* Controls Container */}
-        <div style={{
-          position: 'absolute',
-          top: '20px',
-          right: '20px',
-          zIndex: 1000,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          padding: '12px',
-          borderRadius: '8px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
-        }}>
-          {/* Navigation Controls */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            alignItems: 'center'
-          }}>
-            {/* Up Button */}
-            <button
-              onClick={() => handleNavigate('up')}
-              style={buttonStyle}
-              title="Move Up"
-            >
-              <ChevronUp size={18} />
-            </button>
-
-            {/* Middle Row - Left, Reset, Right */}
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => handleNavigate('left')}
-                style={buttonStyle}
-                title="Move Left"
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <button
-                onClick={handleReset}
-                style={buttonStyle}
-                title="Reset View"
-              >
-                <RotateCcw size={18} />
-              </button>
-              <button
-                onClick={() => handleNavigate('right')}
-                style={buttonStyle}
-                title="Move Right"
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
-
-            {/* Down Button */}
-            <button
-              onClick={() => handleNavigate('down')}
-              style={buttonStyle}
-              title="Move Down"
-            >
-              <ChevronDown size={18} />
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div style={{
-            width: '100%',
-            height: '1px',
-            backgroundColor: 'rgba(0, 0, 0, 0.1)',
-            margin: '4px 0'
-          }} />
-
-          {/* Zoom Controls */}
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            justifyContent: 'center'
-          }}>
-            <button
-              onClick={handleZoomIn}
-              style={buttonStyle}
-              title="Zoom In"
-            >
-              <ZoomIn size={18} />
-            </button>
-            <button
-              onClick={handleZoomOut}
-              style={buttonStyle}
-              title="Zoom Out"
-            >
-              <ZoomOut size={18} />
-            </button>
-          </div>
-        </div>
-
-
-
-        <div style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-          transformOrigin: 'center center',
-          transition: isDragging ? 'none' : 'transform 0.1s ease-out'
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px'
-          }}>
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div
+            ref={contentRef}
+            style={{
+              transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+              transformOrigin: '0 0',
+              transition: isDragging ? 'none' : 'transform 0.3s ease-out',
+              height: '100%',
+              width: 'fit-content'
+            }}
+          >
             <PlanogramGrid
               shelves={shelves}
               shelfLines={shelfLines}
               ItemWithTooltip={ItemWithTooltip}
               setSelectedProduct={setSelectedProduct}
+              onBayClick={handleBayClick}
+              focusedBay={focusedBay}
               isViewOnly={true}
             />
           </div>
-        </div>
+        </DragDropContext>
+      </div>
+
+      {/* Controls */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '12px',
+        marginTop: '20px'
+      }}>
+        <button onClick={handleZoomIn} style={buttonStyle}>
+          <ZoomIn size={20} />
+        </button>
+        <button onClick={handleZoomOut} style={buttonStyle}>
+          <ZoomOut size={20} />
+        </button>
+        <button onClick={handleReset} style={buttonStyle}>
+          <RotateCcw size={20} />
+        </button>
+        <button onClick={() => handleNavigate('left')} style={buttonStyle}>
+          <ChevronLeft size={20} />
+        </button>
+        <button onClick={() => handleNavigate('right')} style={buttonStyle}>
+          <ChevronRight size={20} />
+        </button>
+        <button onClick={() => handleNavigate('up')} style={buttonStyle}>
+          <ChevronUp size={20} />
+        </button>
+        <button onClick={() => handleNavigate('down')} style={buttonStyle}>
+          <ChevronDown size={20} />
+        </button>
       </div>
     </div>
   );

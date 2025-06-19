@@ -2,7 +2,7 @@ import React from 'react';
 import { Droppable } from '@hello-pangea/dnd';
 import ShelfLine from './ShelfLine';
 
-const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct, isViewOnly }) => {
+const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct, isViewOnly, onBayClick, focusedBay }) => {
   const SHELF_GAP = 32;
   const MAX_WIDTH = 850; // Maximum width for the main planogram
 
@@ -29,10 +29,20 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduc
 
   const maxWidth = Math.max(...shelves.map((s) => s.width + 20));
 
+  const handleBayClick = (shelfIdx, subShelfIdx, event) => {
+    // Only handle clicks in fullscreen mode
+    if (!isViewOnly || !onBayClick) return;
+    
+    // Prevent event bubbling
+    event.stopPropagation();
+    
+    onBayClick(shelfIdx, subShelfIdx);
+  };
+
   return (
     <div
       style={{
-        width: isViewOnly ? maxWidth : '100%',
+        width: isViewOnly ? maxWidth : Math.min(maxWidth, MAX_WIDTH),
         maxWidth: isViewOnly ? 'none' : MAX_WIDTH,
         margin: '0 auto',
         background: '#e0e0e0',
@@ -66,6 +76,8 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduc
             }}
           >
             {shelf.subShelves.map((subShelf, subShelfIdx) => {
+              const isFocused = focusedBay?.shelfIndex === shelfIdx && focusedBay?.bayIndex === subShelfIdx;
+              
               const shelfContent = (
                 <ShelfLine
                   shelf={subShelf}
@@ -82,10 +94,26 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduc
                 return (
                   <div 
                     key={`${shelfIdx}-${subShelfIdx}`}
+                    onClick={(e) => handleBayClick(shelfIdx, subShelfIdx, e)}
                     style={{
                       position: 'relative',
                       width: subShelf.width,
-                      height: subShelf.height
+                      height: subShelf.height,
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      ...(isFocused ? {
+                        outline: '3px solid #3498db',
+                        outlineOffset: '2px',
+                        borderRadius: '4px',
+                        boxShadow: '0 0 12px rgba(52, 152, 219, 0.3)'
+                      } : {
+                        outline: '1px solid transparent',
+                        outlineOffset: '2px',
+                        ':hover': {
+                          outline: '2px solid rgba(52, 152, 219, 0.5)',
+                          outlineOffset: '2px'
+                        }
+                      })
                     }}
                   >
                     {shelfContent}

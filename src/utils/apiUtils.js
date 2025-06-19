@@ -96,7 +96,7 @@ const buildShelvesFromMap = (shelfMap) => {
 // Main function to fetch and build shelves from API
 export const buildShelvesFromApi = async () => {
   try {
-    const response = await axios.get("http://localhost:5000/planogramData/scenario%20N3AHAA");
+    const response = await axios.get("http://localhost:5000/planogramData/scenario%20N3ADAA");
     const products = response.data;
     const shelfMap = groupProductsByShelfAndBay(products);
     const dynamicShelves = buildShelvesFromMap(shelfMap);
