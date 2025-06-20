@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, ZoomIn, ZoomOut, RotateCcw, Maximize2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
 import { DragDropContext } from '@hello-pangea/dnd';
 import PlanogramGrid from './PlanogramGrid';
+import { buildShelvesFromApi, groupProductsByShelfAndBay } from '../utils/apiUtils';
 
 const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct, onClose }) => {
   const SHELF_GAP = 32;
@@ -16,6 +17,7 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
   const containerRef = useRef(null);
   const contentRef = useRef(null);
   const lastTouchX = useRef(0);
+  const initialScaleRef = useRef(1);
 
   // Calculate initial scale based on number of bays and shelves
   const calculateInitialScale = () => {
@@ -60,9 +62,10 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
     if (containerRef.current && contentRef.current) {
       const newScale = calculateInitialScale();
       setScale(newScale);
-      
+      initialScaleRef.current = newScale;
       // Center content after scale is set
-      setTimeout(centerContent, 0);
+      // setTimeout(centerContent, 0);
+      handleReset()
     }
   }, [shelves, shelfLines]);
 
@@ -108,6 +111,7 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
 
   const handleZoomIn = () => {
     setScale(prevScale => Math.min(prevScale + 0.1, 4));
+    
   };
 
   const handleZoomOut = () => {
@@ -183,6 +187,19 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
     }
   };
 
+  // Trackpad/touchpad swipe (wheel event) handler for panning
+  const handleWheel = (e) => {
+    // Only pan if zoomed in beyond initial scale
+    if (scale <= initialScaleRef.current) return;
+    // Prevent default scroll behavior
+    e.preventDefault();
+    // Use deltaX and deltaY for panning
+    setPosition(prev => ({
+      x: prev.x - e.deltaX,
+      y: prev.y - e.deltaY
+    }));
+  };
+
   useEffect(() => {
     const container = containerRef.current;
     if (container) {
@@ -192,6 +209,8 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
       container.addEventListener('mouseleave', handleMouseUp);
       container.addEventListener('touchstart', handleTouchStart);
       container.addEventListener('touchmove', handleTouchMove);
+      // Add wheel event for trackpad/touchpad swipe
+      container.addEventListener('wheel', handleWheel, { passive: false });
 
       return () => {
         container.removeEventListener('mousedown', handleMouseDown);
@@ -200,9 +219,10 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
         container.removeEventListener('mouseleave', handleMouseUp);
         container.removeEventListener('touchstart', handleTouchStart);
         container.removeEventListener('touchmove', handleTouchMove);
+        container.removeEventListener('wheel', handleWheel);
       };
     }
-  }, [isDragging, dragStart]);
+  }, [isDragging, dragStart, scale]);
 
   const buttonStyle = {
     padding: '8px',
