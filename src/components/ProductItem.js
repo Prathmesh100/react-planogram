@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const ProductItem = ({ provided, snapshot, item, onClick, isViewOnly }) => {
+const ProductItem = ({ provided, snapshot, item, onClick, isViewOnly, dimmed }) => {
   // console.log('ProductItem rendered', item);
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -30,6 +30,14 @@ const ProductItem = ({ provided, snapshot, item, onClick, isViewOnly }) => {
     transition: 'all 0.2s ease-in-out',
     zIndex: snapshot?.isDragging ? 1000 : isHovered ? 10 : 'auto',
   };
+
+  const dimStyle = dimmed
+    ? {
+        opacity: 0.3,
+        filter: 'grayscale(80%)',
+        pointerEvents: 'none',
+      }
+    : {};
 
   const content = !imageError && item.image_url ? (
     <img
@@ -62,7 +70,7 @@ const ProductItem = ({ provided, snapshot, item, onClick, isViewOnly }) => {
   if (!provided) {
     return (
       <div
-        style={{ ...baseStyle, transform: isHovered ? 'scale(1.1)' : 'scale(1)' }}
+        style={{ ...baseStyle, ...dimStyle, transform: isHovered ? 'scale(1.1)' : 'scale(1)' }}
         onClick={onClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -80,6 +88,7 @@ const ProductItem = ({ provided, snapshot, item, onClick, isViewOnly }) => {
       style={{
         ...baseStyle,
         ...provided.draggableProps.style,
+        ...dimStyle,
         transform: getCombinedTransform(),
       }}
       onClick={onClick}
@@ -92,4 +101,4 @@ const ProductItem = ({ provided, snapshot, item, onClick, isViewOnly }) => {
 };
 
 
-export default ProductItem;
+export default React.memo(ProductItem);

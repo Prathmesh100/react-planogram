@@ -91,4 +91,4 @@ const ZoomableContainer = ({ children }) => {
   );
 };
 
-export default ZoomableContainer;
+export default React.memo(ZoomableContainer);

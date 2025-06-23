@@ -80,4 +80,4 @@ const ItemWithTooltip = ({ item, children }) => {
   );
 };
 
-export default ItemWithTooltip; 
+export default React.memo(ItemWithTooltip); 

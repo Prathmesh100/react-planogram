@@ -4,66 +4,43 @@ import axios from "axios";
 const groupProductsByShelfAndBay = (products) => {
   const shelfMap = {};
   const shelfHeights = {};
-  const shelfProductCounts = {};
-  const shelfMaxBay = {};
+  const shelfWidths = {};
+  const allShelves = new Set();
+  let globalMaxBay = 0;
 
   products.forEach((product) => {
     const { shelf, bay, trayheight, shelfwidth } = product;
-    const shelfKey = `${shelf}`;
-    const shelfBayKey = `${shelf}-${bay}`;
 
-    // Initialize shelf
-    if (!shelfMap[shelf]) {
-      shelfMap[shelf] = {};
+    allShelves.add(shelf);
+
+    globalMaxBay = Math.max(globalMaxBay, bay);
+
+    if (!shelfHeights[shelf] || trayheight > shelfHeights[shelf]) {
+      shelfHeights[shelf] = trayheight;
     }
 
-    // Track max bay per shelf
-    if (!shelfMaxBay[shelf]) {
-      shelfMaxBay[shelf] = bay;
-    } else {
-      shelfMaxBay[shelf] = Math.max(shelfMaxBay[shelf], bay);
+    if (!shelfWidths[shelf] && shelfwidth) {
+      shelfWidths[shelf] = shelfwidth;
     }
-
-    // Track max height per shelf
-    const heightInCm = trayheight;
-    if (!shelfHeights[shelf]) {
-      shelfHeights[shelf] = heightInCm;
-    } else {
-      shelfHeights[shelf] = Math.max(shelfHeights[shelf], heightInCm);
-    }
-
-    // Track number of products per shelf+bay
-    if (!shelfProductCounts[shelfBayKey]) {
-      shelfProductCounts[shelfBayKey] = 0;
-    }
-    shelfProductCounts[shelfBayKey]++;
   });
 
-  // Build shelf map with all bays up to max
-  Object.keys(shelfMaxBay).forEach((shelf) => {
-    const maxBay = shelfMaxBay[shelf];
-    const height = shelfHeights[shelf];
+  allShelves.forEach((shelf) => {
+    shelfMap[shelf] = {};
 
-    for (let bay = 1; bay <= maxBay; bay++) {
-      const key = `${shelf}-${bay}`;
-      const productCount = shelfProductCounts[key] || 0;
-      const totalPadding = productCount * 2;
+    const height = shelfHeights[shelf] ?? 60;
+    const width = shelfWidths[shelf] ?? 133;
 
-      const shelfwidth = products.find(
-        (p) => p.shelf === parseInt(shelf) && p.bay === bay
-      )?.shelfwidth ?? 133; // fallback shelfwidth
-
-      if (!shelfMap[shelf][bay]) {
-        shelfMap[shelf][bay] = {};
-      }
-
-      shelfMap[shelf][bay].width = shelfwidth * 2;
-      shelfMap[shelf][bay].height = height * 2;
+    for (let bay = 1; bay <= globalMaxBay; bay++) {
+      shelfMap[shelf][bay] = {
+        width: width * 2,
+        height: height * 2,
+      };
     }
   });
 
   return shelfMap;
 };
+
 
 // Helper function to build shelves from map
 const buildShelvesFromMap = (shelfMap) => {

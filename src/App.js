@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Search, Share, Download, Settings, ChevronLeft, ChevronRight, Eye, MoreVertical, Maximize2 } from "lucide-react";
+import { Search, Share, Download, Settings, ChevronLeft, ChevronRight, Eye, MoreVertical, Maximize2, ZoomInIcon, ZoomOutIcon } from "lucide-react";
 import { toast } from 'react-toastify';
 import {
   AppBar,
@@ -8,10 +8,6 @@ import {
   Typography,
   Button,
   Box,
-  Paper,
-  IconButton,
-  Container,
-  Divider
 } from '@mui/material';
 import PlanogramGrid from './components/PlanogramGrid';
 import ProductInventory from './components/ProductInventory';
@@ -20,22 +16,35 @@ import RightSideBar from "./pages/Planogram/RightSideBar";
 import FullscreenView from './components/FullscreenView';
 import { initialItems } from "./utils/initialItems";
 import { buildShelvesFromApi } from "./utils/apiUtils";
+import FilterPanel from './components/FilterPanel';
+import { FilterProvider, useFilter } from './components/FilterContext';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import ZoomControls from './components/ZoomControls';
+import LeftSideBar from "./pages/Planogram/LeftSideBar";
+import { onDragEnd as onDragEndUtil, generatePayload as generatePayloadUtil } from './utils/planogramFunctions';
 
-const EMPTY_SPACE_WIDTH = 20; // Width of each empty space
-const EMPTY_SPACE_MARGIN = 4; // Margin between empty spaces
+const EMPTY_SPACE_WIDTH = 20; 
 
-function App() {
+function AppContent() {
+  const [filterOpen, setFilterOpen] = useState(false);
+  const { filters, setFilters, options, setOptions, resetFilters } = useFilter();
   const [SHELVES, setShelves] = useState([])
   const [apiProducts, setApiProducts] = useState();
-  // Initialize shelfLines with empty arrays when SHELVES is empty
   const [shelfLines, setShelfLines] = useState([]);
+  const [zoomState, setZoomState] = useState({ oldValue: 1, newValue: 1 });
+  const [unplacedItems, setUnplacedItems] = useState(initialItems);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(true);
 
-  // Update shelfLines whenever SHELVES changes
+  // Update shelfLines whenever api changes
   useEffect(() => {
     if (SHELVES.length > 0 && apiProducts.length > 0) {
+      const zoomFactor = zoomState.newValue;
+
       const newShelfLines = SHELVES.map((shelf, shelfIdx) =>
         shelf.subShelves.map((subShelf, subShelfIdx) => {
-          const shelfWidth = subShelf.width;
+          const shelfWidth = subShelf.width * zoomFactor;
+
           const productsForShelf = apiProducts.filter(
             (product) =>
               product.shelf - 1 === shelfIdx &&
@@ -47,16 +56,16 @@ function App() {
           const shelfLine = [];
           let cursor = 0;
 
-          productsForShelf.forEach((product, idx) => {
+          productsForShelf.forEach((product) => {
             const { product_details, position, facings_wide = 1 } = product;
 
             const rawWidth = product_details?.width ?? 50;
             const rawHeight = product_details?.height ?? 50;
 
-            const unitWidth = (rawWidth / 5);
-            const height = rawHeight / 5;
+            const unitWidth = (rawWidth / 5) * zoomFactor;
+            const height = (rawHeight / 5) * zoomFactor;
 
-            const scaledPosition = Math.min((position * 2) % product.shelfwidth, product.shelfwidth);
+            const scaledPosition = Math.min((position * 2) % product.shelfwidth, product.shelfwidth) * zoomFactor;
 
             // Insert empty space if needed
             if (scaledPosition > cursor) {
@@ -65,17 +74,18 @@ function App() {
                 width: scaledPosition - cursor,
                 height: 0,
                 bgColor: '#f0f0f0',
-                isEmpty: true
+                isEmpty: true,
+                xPosition: cursor / 2,
               });
               cursor = scaledPosition;
             }
-            // console.log(scaledPosition,cursor)
 
-            // Add multiple facings of the product
+            // Add multiple horizontal facings of the product
             for (let i = 0; i < facings_wide; i++) {
               shelfLine.push({
                 ...product_details,
-                id: `${product.product_id}-${i}`,
+                id: `${product.product_id}_${i}`,
+                product_id: product.product_id,
                 width: unitWidth,
                 height,
                 isEmpty: false,
@@ -91,42 +101,42 @@ function App() {
                 facings_high: product.facings_high,
                 total_facings: product.total_facings,
                 orientation: product.orientation,
-                linear: product.linear
+                linear: product.linear,
+                xPosition: cursor / 2,
               });
 
-              cursor += unitWidth; // Each facing with padding
+              cursor += unitWidth;
             }
           });
 
           const remainingWidth = shelfWidth - cursor;
-          console.log(cursor, shelfWidth, remainingWidth);
 
-
-          // Fill till end of shelf with fixed width empty blocks (20px)
-          // Fill till end of shelf with fixed-width empty blocks (max 20px per block)
+          // Fill till end of shelf with fixed-width empty blocks (20px max)
           while (cursor < shelfWidth) {
             const remaining = shelfWidth - cursor;
-            const blockWidth = Math.min(20, remaining); // Prevent overflow
+            const blockWidth = Math.min(20 * zoomFactor, remaining);
 
             shelfLine.push({
               id: `empty-${shelfIdx}-${subShelfIdx}-${cursor}-end`,
               width: blockWidth,
               height: 0,
               bgColor: '#f0f0f0',
-              isEmpty: true
+              isEmpty: true,
+              xPosition: cursor / 2,
             });
 
             cursor += blockWidth;
           }
 
-
           return shelfLine;
         })
       );
+      console.log('Updated shelfLines:', newShelfLines);
 
       setShelfLines(newShelfLines);
     }
-  }, [SHELVES, apiProducts]);
+  }, [apiProducts]);
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -137,257 +147,94 @@ function App() {
     fetchData();
   }, []);
 
-  const [unplacedItems, setUnplacedItems] = useState(initialItems);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const scaledShelves = SHELVES.map((shelf) => {
+      const scaledSubShelves = shelf.subShelves?.map((sub) => ({
+        ...sub,
+        width: (sub.width / zoomState.oldValue) * zoomState.newValue,
+        height: (sub.height / zoomState.oldValue) * zoomState.newValue,
+      })) || [];
+
+      return {
+        ...shelf,
+        width: (shelf.width / zoomState.oldValue) * zoomState.newValue,
+        height: (shelf.height / zoomState.oldValue) * zoomState.newValue,
+        subShelves: scaledSubShelves,
+      };
+    });
+
+    setShelves(scaledShelves);
+  }, [zoomState]);
+
+  useEffect(() => {
+    const scaledShelfLines = shelfLines.map((shelfLine) => {
+      return shelfLine.map((subShelf) => {
+        return subShelf.map((item) => {
+          if (item.isEmpty) return item;
+          return {
+            ...item,
+            width: (item.width / zoomState.oldValue) * zoomState.newValue,
+            height: (item.height / zoomState.oldValue) * zoomState.newValue,
+            xPosition: (item.xPosition / zoomState.oldValue) * zoomState.newValue,
+          };
+        });
+      });
+    });
+    setShelfLines(scaledShelfLines);
+  }, [zoomState])
+
+  // Add effect to populate filter options from apiProducts
+  useEffect(() => {
+    if (apiProducts && apiProducts.length > 0) {
+      const subCategories = Array.from(new Set(apiProducts.map(p => p.product_details?.['tags.subgroup']).filter(Boolean)));
+      const brands = Array.from(new Set(apiProducts.map(p => p.product_details?.['tags.brand']).filter(Boolean)));
+      const priceTiers = Array.from(new Set(apiProducts.map(p => p.product_details?.['tags.price_tier']).filter(Boolean)));
+      setOptions({ subCategories, brands, priceTiers });
+    }
+  }, [apiProducts, setOptions]);
+
+  // Filtered products logic
+  const filteredProducts = React.useMemo(() => {
+    if (!apiProducts) return [];
+    return apiProducts.filter(product => {
+      const { product_details } = product;
+      const subCategory = product_details?.['tags.subgroup'];
+      const brand = product_details?.['tags.brand'];
+      const priceTier = product_details?.['tags.price_tier'];
+      const subCatMatch = filters.subCategories.length === 0 || filters.subCategories.includes(subCategory);
+      const brandMatch = filters.brands.length === 0 || filters.brands.includes(brand);
+      const priceTierMatch = filters.priceTiers.length === 0 || filters.priceTiers.includes(priceTier);
+      return subCatMatch && brandMatch && priceTierMatch;
+    });
+  }, [apiProducts, filters]);
 
 
+
+
+  // Compute dimmedProductIds: all product item ids in shelfLines that are not in filteredProducts
+  const filteredProductIds = React.useMemo(() => new Set(filteredProducts.map(p => p.product_id)), [filteredProducts]);
+  const dimmedProductIds = React.useMemo(() => {
+    if (!shelfLines || shelfLines.length === 0) return [];
+    // Flatten shelfLines for faster iteration
+    return shelfLines.flat(2)
+      .filter(item => !item.isEmpty && item.id && item.product_id && !filteredProductIds.has(item.product_id))
+      .map(item => item.id);
+  }, [shelfLines, filteredProductIds]);
+
+  // Refactored onDragEnd
   const onDragEnd = (result) => {
-    const { source, destination } = result;
-    if (!destination) return;
-
-    // Helper to get the item being dragged
-    let item = null;
-    if (source.droppableId === 'items') {
-      item = unplacedItems[source.index];
-    } else if (source.droppableId.startsWith('shelf-line-')) {
-      const [shelfIdx, subShelfIdx] = source.droppableId.replace('shelf-line-', '').split('-').map(Number);
-      item = shelfLines[shelfIdx][subShelfIdx][source.index];
-    }
-
-    // Create new arrays to avoid mutating state directly
-    const newShelfLines = shelfLines.map(shelf => shelf.map(subShelf => [...subShelf]));
-    const newUnplacedItems = [...unplacedItems];
-
-
-    const isWithinShelfWidth = (shelfIdx, subShelfIdx, position, itemWidth, source) => {
-      const shelfRow = shelfLines[shelfIdx][subShelfIdx];
-      let availableWidth = 0;
-      let currentIndex = position;
-
-      while (currentIndex < shelfRow.length && availableWidth < itemWidth) {
-        const slot = shelfRow[currentIndex];
-
-        const isSameItemBeingMoved =
-          source.droppableId === `shelf-line-${shelfIdx}-${subShelfIdx}` &&
-          currentIndex === source.index;
-
-        if (isSameItemBeingMoved) {
-          availableWidth += itemWidth;
-        } else if (slot?.isEmpty) {
-          availableWidth += slot.width;
-        } else {
-          break;
-        }
-        currentIndex++;
-      }
-
-      return availableWidth >= itemWidth;
-    };
-
-
-    // Handle drag from inventory to shelf
-    if (source.droppableId === 'items' && destination.droppableId.startsWith('shelf-line-')) {
-      const [shelfIdx, subShelfIdx] = destination.droppableId.replace('shelf-line-', '').split('-').map(Number);
-      const destShelf = newShelfLines[shelfIdx][subShelfIdx];
-
-      if (!isWithinShelfWidth(shelfIdx, subShelfIdx, destination.index, item.width, source)) {
-        toast.error(`Cannot place '${item.name}' here - would exceed shelf width.`);
-        return;
-      }
-
-      let totalWidth = 0;
-      let endIndex = destination.index;
-
-      while (endIndex < destShelf.length && totalWidth < item.width) {
-        const slot = destShelf[endIndex];
-
-        // Stop if we hit a non-empty item that isn't the one being moved (for safety)
-        if (!slot?.isEmpty) break;
-
-        totalWidth += slot.width;
-        endIndex++;
-      }
-
-      // If we didn't collect enough space, cancel placement
-      if (totalWidth < item.width) {
-        toast.error(`Not enough consecutive empty space for '${item.name}'`);
-        return;
-      }
-
-      // Remove all consumed empty slots and insert item
-      destShelf.splice(destination.index, endIndex - destination.index, item);
-
-      // Add back leftover space if item didn't use all the empty width
-      const leftover = totalWidth - item.width;
-      if (leftover > 0) {
-        destShelf.splice(destination.index + 1, 0, {
-          id: `empty-${shelfIdx}-${subShelfIdx}-${Date.now()}`,
-          width: leftover,
-          height: 0,
-          bgColor: '#f0f0f0',
-          isEmpty: true,
-        });
-      }
-
-      // Remove from inventory
-      newUnplacedItems.splice(source.index, 1);
-    }
-
-    // Handle drag from shelf to inventory
-    else if (source.droppableId.startsWith('shelf-line-') && destination.droppableId === 'items') {
-      const [shelfIdx, subShelfIdx] = source.droppableId.replace('shelf-line-', '').split('-').map(Number);
-      const sourceShelf = newShelfLines[shelfIdx][subShelfIdx];
-
-      // Remove the item
-      const removedItem = sourceShelf.splice(source.index, 1)[0];
-
-      const emptySpaces = [];
-      let remainingWidth = removedItem.width;
-      const defaultHeight = 0;
-
-      while (remainingWidth > 0) {
-        const thisWidth = Math.min(remainingWidth, EMPTY_SPACE_WIDTH);
-        emptySpaces.push({
-          id: `empty-${shelfIdx}-${subShelfIdx}-${Date.now()}-${Math.random()}`, // Ensure uniqueness
-          width: thisWidth,
-          height: defaultHeight,
-          bgColor: '#f0f0f0',
-          isEmpty: true,
-        });
-        remainingWidth -= thisWidth;
-      }
-
-      // Insert all empty spaces where the item was
-      sourceShelf.splice(source.index, 0, ...emptySpaces);
-
-      // Add item back to unplacedItems
-      newUnplacedItems.splice(destination.index, 0, removedItem);
-    }
-
-    // Handle moving within inventory
-    else if (source.droppableId === 'items' && destination.droppableId === 'items') {
-      const [moved] = newUnplacedItems.splice(source.index, 1);
-      newUnplacedItems.splice(destination.index, 0, moved);
-    }
-    // Handle moving within or between shelves
-    else if (
-      source.droppableId.startsWith("shelf-line-") &&
-      destination.droppableId.startsWith("shelf-line-")
-    ) {
-      const [srcShelfIdx, srcSubShelfIdx] = source.droppableId.replace("shelf-line-", "").split("-").map(Number);
-      const [destShelfIdx, destSubShelfIdx] = destination.droppableId.replace("shelf-line-", "").split("-").map(Number);
-
-      const sourceShelf = newShelfLines[srcShelfIdx][srcSubShelfIdx];
-      const destShelf = newShelfLines[destShelfIdx][destSubShelfIdx];
-
-      const isSamePosition =
-        source.index === destination.index &&
-        srcShelfIdx === destShelfIdx &&
-        srcSubShelfIdx === destSubShelfIdx;
-
-      if (isSamePosition) return;
-
-      const [removedItem] = sourceShelf.splice(source.index, 1);
-
-      let remainingWidth = removedItem.width;
-      const emptySpaces = [];
-      while (remainingWidth > 0) {
-        const thisWidth = Math.min(remainingWidth, EMPTY_SPACE_WIDTH);
-        emptySpaces.push({
-          id: `empty-${srcShelfIdx}-${srcSubShelfIdx}-${Date.now()}-${Math.random()}`,
-          width: thisWidth,
-          height: 0,
-          bgColor: "#f0f0f0",
-          isEmpty: true,
-        });
-        remainingWidth -= thisWidth;
-      }
-      sourceShelf.splice(source.index, 0, ...emptySpaces);
-
-      let totalWidth = 0;
-      let endIndex = destination.index;
-
-      while (endIndex < destShelf.length && totalWidth < removedItem.width) {
-        const cell = destShelf[endIndex];
-        if (!cell?.isEmpty) break;
-        totalWidth += cell.width;
-        endIndex++;
-      }
-
-      if (totalWidth < removedItem.width) {
-        toast.error(`Not enough space to place '${removedItem.name}'.`);
-        return;
-      }
-
-      // Remove the consumed empty slots
-      destShelf.splice(destination.index, endIndex - destination.index, removedItem);
-
-      // Add leftover empty space (if consumed more than item width)
-      const leftover = totalWidth - removedItem.width;
-      if (leftover > 0) {
-        destShelf.splice(destination.index + 1, 0, {
-          id: `empty-${destShelfIdx}-${destSubShelfIdx}-${Date.now()}-${Math.random()}`,
-          width: leftover,
-          height: 0,
-          bgColor: "#f0f0f0",
-          isEmpty: true,
-        });
-      }
-    }
-
-    // Update state with new arrays
-    setShelfLines(newShelfLines);
-    setUnplacedItems(newUnplacedItems);
+    onDragEndUtil({
+      result,
+      shelfLines,
+      setShelfLines,
+      unplacedItems,
+      setUnplacedItems,
+      EMPTY_SPACE_WIDTH,
+    });
   };
 
-  // Function to generate payload with positions
   const generatePayload = () => {
-    const payload = {
-      shelves: shelfLines.map((shelfLine, shelfIdx) => ({
-        shelfId: `shelf-${shelfIdx + 1}`,
-        name: SHELVES[shelfIdx].name || `Shelf ${shelfIdx + 1}`,
-        subShelves: shelfLine.map((subShelf, subShelfIdx) => {
-          // Calculate positions for non-empty items
-          const items = subShelf.reduce((acc, item, index) => {
-            if (!item.isEmpty) {
-              // Calculate x position based on index and item widths
-              let xPosition = 0;
-              for (let i = 0; i < index; i++) {
-                xPosition += subShelf[i].width;
-              }
-
-              acc.push({
-                id: item.id,
-                name: item.name,
-                position: {
-                  x: xPosition / 2,
-                  y: 0, // Since items are in a single row, y is always 0
-                  width: item.width * 5,
-                  height: item.height * 5
-                },
-                metadata: {
-                  brand: item.brand,
-                  price: item.price,
-                  description: item.description
-                }
-              });
-            }
-            return acc;
-          }, []);
-
-          return {
-            subShelfId: `subshelf-${shelfIdx + 1}-${subShelfIdx + 1}`,
-            width: SHELVES[shelfIdx].subShelves[subShelfIdx].width,
-            height: SHELVES[shelfIdx].subShelves[subShelfIdx].height,
-            items: items
-          };
-        })
-      }))
-    };
-
-    console.log('Planogram Payload:', JSON.stringify(payload, null, 2));
-    return payload;
+    return generatePayloadUtil({ shelfLines, SHELVES, zoomState });
   };
 
   return (
@@ -400,65 +247,58 @@ function App() {
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button
               variant="contained"
-              startIcon={<Maximize2 size={16} />}
-              onClick={() => setIsFullscreen(true)}
-            >
-              Fullscreen View
-            </Button>
-            <Button
-              variant="contained"
               startIcon={<Download size={16} />}
               onClick={generatePayload}
+              sx={{ backgroundColor: '#05AF97' }}
             >
               Export Planogram
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<FilterListIcon />}
+              onClick={() => setFilterOpen(true)}
+              sx={{ color: '#05AF97', borderColor: '#05AF97' }}
+            >
+              Filter
             </Button>
           </Box>
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
+      <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', width: '100%', gap: 2 }}>
         <DragDropContext onDragEnd={onDragEnd}>
           <Box sx={{ flex: 1, display: 'flex' }}>
             {/* Left Sidebar - Products */}
-            <Paper
-              elevation={0}
-              sx={{
-                width: '280px',
-                borderRight: '1px solid #e0e0e0',
-                display: 'flex',
-                flexDirection: 'column'
-              }}
-            >
-              <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0', bgcolor: '#f8f9fa' }}>
-                <Typography variant="h6" sx={{ mb: 1, fontSize: '16px', fontWeight: '600', color: '#2c3e50' }}>
-                  📦 Product Inventory
-                </Typography>
-                <Typography variant="caption" sx={{ color: '#7f8c8d' }}>
-                  {unplacedItems.length} items available
-                </Typography>
-              </Box>
-              <ProductInventory
-                unplacedItems={unplacedItems}
-                selectedProduct={selectedProduct}
-                setSelectedProduct={setSelectedProduct}
-                ItemWithTooltip={ItemWithTooltip}
-              />
-            </Paper>
+            <LeftSideBar unplacedItems={unplacedItems}
+              selectedProduct={selectedProduct}
+              setSelectedProduct={setSelectedProduct}
+            />
 
             {/* Center - Planogram Grid */}
-            <Box sx={{ flex: 1, bgcolor: '#f8f9fa', p: 2.5, overflowY: 'auto', }}>
+            <Box sx={{ flex: 1, bgcolor: '#f8f9fa', p: 2.5, overflowY: 'auto', position: 'relative', display: 'flex', flexDirection: 'column' }}>
               <PlanogramGrid
                 shelves={SHELVES}
                 shelfLines={shelfLines}
                 ItemWithTooltip={ItemWithTooltip}
                 setSelectedProduct={setSelectedProduct}
+                isViewOnly={isFullscreen}
+                dimmedProductIds={dimmedProductIds}
               />
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                <ZoomControls
+                  onZoomIn={() => setZoomState((prev) => ({ oldValue: prev.newValue, newValue: prev.newValue + 0.1 }))}
+                  onZoomOut={() => setZoomState((prev) => ({ oldValue: prev.newValue, newValue: prev.newValue - 0.1 }))}
+                  onReset={() => setZoomState((prev) => ({ oldValue: prev.newValue, newValue: 1 }))}
+                  onFullscreen={() => setIsFullscreen(true)}
+                  zoomValue={zoomState.newValue}
+                />
+              </Box>
             </Box>
           </Box>
         </DragDropContext>
 
         {/* Right Sidebar - Product Details */}
-        <RightSideBar selectedProduct={selectedProduct} />
+        <RightSideBar selectedProduct={selectedProduct} isViewOnly={isFullscreen} />
       </Box>
 
       {/* Fullscreen View */}
@@ -469,9 +309,28 @@ function App() {
           ItemWithTooltip={ItemWithTooltip}
           setSelectedProduct={setSelectedProduct}
           onClose={() => setIsFullscreen(false)}
+          dimmedProductIds={dimmedProductIds}
+          setFilterOpen={setFilterOpen}
         />
       )}
+
+      <FilterPanel
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        filters={filters}
+        setFilters={setFilters}
+        options={options}
+        onReset={resetFilters}
+      />
     </Box>
+  );
+}
+
+function App() {
+  return (
+    <FilterProvider>
+      <AppContent />
+    </FilterProvider>
   );
 }
 

@@ -7,9 +7,12 @@ const ProductInventory = ({ unplacedItems, selectedProduct, setSelectedProduct, 
     {(provided) => (
       <div
         style={{
-          flex: 1,
           padding: '16px',
-          overflowY: 'auto'
+          overflowY: 'auto',
+          flexWrap: 'wrap',
+          display: 'flex',
+          alignItems: "center"
+
         }}
         ref={provided.innerRef}
         {...provided.droppableProps}
@@ -17,7 +20,7 @@ const ProductInventory = ({ unplacedItems, selectedProduct, setSelectedProduct, 
         {unplacedItems.map((item, index) => (
           <Draggable draggableId={item.id} index={index} key={item.id}>
             {(provided, snapshot) => (
-              <ItemWithTooltip item={item}>
+              // <ItemWithTooltip item={item}>
                 <div
                   onClick={() => setSelectedProduct(item)}
                   style={{
@@ -28,7 +31,7 @@ const ProductInventory = ({ unplacedItems, selectedProduct, setSelectedProduct, 
                 >
                   <ProductItem provided={provided} snapshot={snapshot} item={item} />
                 </div>
-              </ItemWithTooltip>
+              // </ItemWithTooltip>
             )}
           </Draggable>
         ))}
@@ -38,4 +41,4 @@ const ProductInventory = ({ unplacedItems, selectedProduct, setSelectedProduct, 
   </Droppable>
 );
 
-export default ProductInventory; 
+export default React.memo(ProductInventory); 

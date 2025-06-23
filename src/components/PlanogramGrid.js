@@ -2,15 +2,15 @@ import React from 'react';
 import { Droppable } from '@hello-pangea/dnd';
 import ShelfLine from './ShelfLine';
 
-const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct, isViewOnly, onBayClick, focusedBay }) => {
+const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct, isViewOnly, onBayClick, focusedBay, dimmedProductIds = [] }) => {
   const SHELF_GAP = 32;
-  const MAX_WIDTH = 850; // Maximum width for the main planogram
+  const MAX_WIDTH = 800; // Maximum width for the main planogram
 
   // Return early if shelves or shelfLines is empty
   if (!shelves || !shelfLines || shelves.length === 0 || shelfLines.length === 0) {
     return (
       <div style={{
-        width: '100%',
+        width: MAX_WIDTH,
         margin: '0 auto',
         background: '#e0e0e0',
         borderRadius: '8px',
@@ -20,7 +20,7 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduc
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        minHeight: '200px'
+        minHeight: '200px',
       }}>
         <div style={{ color: '#666', fontSize: '14px' }}>Loading shelves...</div>
       </div>
@@ -55,8 +55,9 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduc
           transformOrigin: 'top left'
         } : {
           overflowX: 'auto',
-          overflowY: 'hidden'
-        })
+          overflowY: 'auto'
+        }),
+        maxHeight: isViewOnly ? '100vh' : 'calc(100vh - 200px)',
       }}
     >
       <div style={{
@@ -87,6 +88,7 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduc
                   SHELF_GAP={SHELF_GAP}
                   setSelectedProduct={setSelectedProduct}
                   isViewOnly={isViewOnly}
+                  dimmedProductIds={dimmedProductIds}
                 />
               );
 
@@ -137,6 +139,7 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduc
                       ItemWithTooltip={ItemWithTooltip}
                       SHELF_GAP={SHELF_GAP}
                       setSelectedProduct={setSelectedProduct}
+                      dimmedProductIds={dimmedProductIds}
                     />
                   )}
                 </Droppable>
@@ -149,4 +152,4 @@ const PlanogramGrid = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduc
   );
 };
 
-export default PlanogramGrid; 
+export default React.memo(PlanogramGrid); 

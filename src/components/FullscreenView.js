@@ -3,11 +3,15 @@ import { X, ZoomIn, ZoomOut, RotateCcw, Maximize2, ChevronLeft, ChevronRight, Ch
 import { DragDropContext } from '@hello-pangea/dnd';
 import PlanogramGrid from './PlanogramGrid';
 import { buildShelvesFromApi, groupProductsByShelfAndBay } from '../utils/apiUtils';
+import { Edit } from '@mui/icons-material';
+import { Button } from '@mui/material';
+import FilterListIcon from '@mui/icons-material/FilterList';
 
-const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct, onClose }) => {
+
+const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProduct, onClose, dimmedProductIds = [], setFilterOpen }) => {
   const SHELF_GAP = 32;
   const CONTAINER_PADDING = 20;
-  
+
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -111,7 +115,7 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
 
   const handleZoomIn = () => {
     setScale(prevScale => Math.min(prevScale + 0.1, 4));
-    
+
   };
 
   const handleZoomOut = () => {
@@ -128,7 +132,7 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
   const handleBayClick = (shelfIdx, bayIndex) => {
     // If already focused on this bay, reset the view
     if (focusedBay?.shelfIndex === shelfIdx && focusedBay?.bayIndex === bayIndex) {
-      handleReset();
+      // handleReset();
       return;
     }
 
@@ -159,7 +163,7 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
 
     // Set zoom level
     const zoomLevel = 2;
-    
+
     // Calculate position to center the bay
     const targetX = (containerWidth / 2) - (bayX + bayWidth / 2) * zoomLevel;
     const targetY = (containerHeight / 2) - (bayY + bayHeight / 2) * zoomLevel;
@@ -226,7 +230,7 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
 
   const buttonStyle = {
     padding: '8px',
-    backgroundColor: '#3498db',
+    backgroundColor: '#05AF97',
     color: 'white',
     border: 'none',
     borderRadius: '6px',
@@ -286,24 +290,18 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
           zIndex: 1000
         }}>
-          Click on any bay to zoom in. Click again to reset view.
+          Click on any bay to zoom in.
         </div>
-        <button
-          onClick={onClose}
-          style={{
-            padding: '8px',
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}
+
+        <Button
+          variant="outlined"
+          startIcon={<FilterListIcon />}
+          onClick={() => setFilterOpen(true)}
+          sx={{ color: '#05AF97', borderColor: '#05AF97' }}
         >
-          <X size={20} />
-        </button>
+          Filter
+        </Button>
+
       </div>
 
       {/* Main Content */}
@@ -338,6 +336,7 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
               onBayClick={handleBayClick}
               focusedBay={focusedBay}
               isViewOnly={true}
+              dimmedProductIds={dimmedProductIds}
             />
           </div>
         </DragDropContext>
@@ -359,6 +358,14 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
         <button onClick={handleReset} style={buttonStyle}>
           <RotateCcw size={20} />
         </button>
+        <button
+          onClick={onClose}
+          style={
+            buttonStyle
+          }
+        >
+          <Edit size={20} />
+        </button>
         <button onClick={() => handleNavigate('left')} style={buttonStyle}>
           <ChevronLeft size={20} />
         </button>
@@ -371,9 +378,10 @@ const FullscreenView = ({ shelves, shelfLines, ItemWithTooltip, setSelectedProdu
         <button onClick={() => handleNavigate('down')} style={buttonStyle}>
           <ChevronDown size={20} />
         </button>
+
       </div>
     </div>
   );
 };
 
-export default FullscreenView; 
+export default React.memo(FullscreenView); 

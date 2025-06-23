@@ -12,6 +12,7 @@ const ShelfLine = ({
   SHELF_GAP,
   setSelectedProduct,
   isViewOnly,
+  dimmedProductIds = [],
 }) => {
   const shelfContent = (
     <div
@@ -21,15 +22,17 @@ const ShelfLine = ({
         width: shelf.width,
         marginBottom: SHELF_GAP,
         borderBottom: '4px solid #b0b0b0',
+        padding:isViewOnly ? '0' : '0 1px',
         display: 'flex',
         alignItems: 'flex-end',
         background: snapshot?.isDraggingOver ? '#d0eaff' : 'transparent',
         transition: 'background 0.2s',
       }}
     >
+      
       {items.map((item, itemIdx) => {
         const facingCount = item.facings_high || 1;
-
+        const isDimmed = dimmedProductIds.includes(item.id);
         // VIEW-ONLY MODE
         if (isViewOnly) {
           return (
@@ -59,6 +62,7 @@ const ShelfLine = ({
                     item={item}
                     onClick={() => setSelectedProduct(item)}
                     isViewOnly={true}
+                    dimmed={isDimmed}
                   />
                 </div>
               ))}
@@ -86,8 +90,9 @@ const ShelfLine = ({
                     provided={provided}
                     snapshot={snapshot}
                     item={item}
-                    onClick={() => setSelectedProduct(item)}
+                    onClick={() => {!item.isEmpty && setSelectedProduct(item)}}
                     isViewOnly={false}
+                    dimmed={isDimmed}
                   />
                 ))}
               </div>
@@ -108,4 +113,4 @@ const ShelfLine = ({
   );
 };
 
-export default ShelfLine;
+export default React.memo(ShelfLine);
